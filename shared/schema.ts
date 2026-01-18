@@ -147,6 +147,7 @@ export interface CourierProfile {
   rating: number;
   completedOrdersCount: number;
   verificationStatus: VerificationStatus;
+  deletedAt: string | null;
 }
 
 export const updateCourierProfileSchema = z.object({
@@ -165,6 +166,7 @@ export interface Order {
   price: number;
   createdAt: string;
   completedAt: string | null;
+  deletedAt: string | null;
 }
 
 export const insertOrderSchema = z.object({

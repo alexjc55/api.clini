@@ -47,16 +47,20 @@ export interface IStorage {
   updateAddress(id: string, updates: Partial<Address>): Promise<Address | undefined>;
   deleteAddress(id: string): Promise<boolean>;
 
-  getCourierProfile(courierId: string): Promise<CourierProfile | undefined>;
+  getCourierProfile(courierId: string, includeDeleted?: boolean): Promise<CourierProfile | undefined>;
+  getCouriers(includeDeleted?: boolean): Promise<CourierProfile[]>;
   createCourierProfile(courierId: string): Promise<CourierProfile>;
   updateCourierProfile(courierId: string, updates: UpdateCourierProfile): Promise<CourierProfile | undefined>;
+  updateCourierVerification(courierId: string, status: "verified" | "rejected"): Promise<CourierProfile | undefined>;
+  softDeleteCourier(courierId: string): Promise<CourierProfile | undefined>;
   incrementCourierOrders(courierId: string): Promise<void>;
 
-  getOrder(id: string): Promise<Order | undefined>;
-  getOrders(filters?: { clientId?: string; courierId?: string; status?: OrderStatus }): Promise<Order[]>;
+  getOrder(id: string, includeDeleted?: boolean): Promise<Order | undefined>;
+  getOrders(filters?: { clientId?: string; courierId?: string; status?: OrderStatus; includeDeleted?: boolean }): Promise<Order[]>;
   createOrder(clientId: string, order: InsertOrder): Promise<Order>;
   updateOrder(id: string, updates: UpdateOrder, performedBy: string): Promise<Order | undefined>;
   assignCourier(orderId: string, courierId: string, performedBy: string): Promise<Order | undefined>;
+  softDeleteOrder(orderId: string): Promise<Order | undefined>;
 
   getOrderEvents(orderId: string): Promise<OrderEvent[]>;
   createOrderEvent(performedBy: string, event: InsertOrderEvent): Promise<OrderEvent>;
@@ -271,8 +275,19 @@ export class MemStorage implements IStorage {
     return this.addresses.delete(id);
   }
 
-  async getCourierProfile(courierId: string): Promise<CourierProfile | undefined> {
-    return this.courierProfiles.get(courierId);
+  async getCourierProfile(courierId: string, includeDeleted = false): Promise<CourierProfile | undefined> {
+    const profile = this.courierProfiles.get(courierId);
+    if (!profile) return undefined;
+    if (!includeDeleted && profile.deletedAt) return undefined;
+    return profile;
+  }
+
+  async getCouriers(includeDeleted = false): Promise<CourierProfile[]> {
+    let profiles = Array.from(this.courierProfiles.values());
+    if (!includeDeleted) {
+      profiles = profiles.filter(p => !p.deletedAt);
+    }
+    return profiles;
   }
 
   async createCourierProfile(courierId: string): Promise<CourierProfile> {
@@ -281,7 +296,8 @@ export class MemStorage implements IStorage {
       availabilityStatus: "offline",
       rating: 0,
       completedOrdersCount: 0,
-      verificationStatus: "pending"
+      verificationStatus: "pending",
+      deletedAt: null
     };
     this.courierProfiles.set(courierId, profile);
     return profile;
@@ -289,26 +305,48 @@ export class MemStorage implements IStorage {
 
   async updateCourierProfile(courierId: string, updates: UpdateCourierProfile): Promise<CourierProfile | undefined> {
     const profile = this.courierProfiles.get(courierId);
-    if (!profile) return undefined;
+    if (!profile || profile.deletedAt) return undefined;
     const updated = { ...profile, ...updates };
     this.courierProfiles.set(courierId, updated);
     return updated;
   }
 
+  async updateCourierVerification(courierId: string, status: "verified" | "rejected"): Promise<CourierProfile | undefined> {
+    const profile = this.courierProfiles.get(courierId);
+    if (!profile) return undefined;
+    profile.verificationStatus = status;
+    this.courierProfiles.set(courierId, profile);
+    return profile;
+  }
+
+  async softDeleteCourier(courierId: string): Promise<CourierProfile | undefined> {
+    const profile = this.courierProfiles.get(courierId);
+    if (!profile) return undefined;
+    profile.deletedAt = new Date().toISOString();
+    this.courierProfiles.set(courierId, profile);
+    return profile;
+  }
+
   async incrementCourierOrders(courierId: string): Promise<void> {
     const profile = this.courierProfiles.get(courierId);
-    if (profile) {
+    if (profile && !profile.deletedAt) {
       profile.completedOrdersCount++;
       this.courierProfiles.set(courierId, profile);
     }
   }
 
-  async getOrder(id: string): Promise<Order | undefined> {
-    return this.orders.get(id);
+  async getOrder(id: string, includeDeleted = false): Promise<Order | undefined> {
+    const order = this.orders.get(id);
+    if (!order) return undefined;
+    if (!includeDeleted && order.deletedAt) return undefined;
+    return order;
   }
 
-  async getOrders(filters?: { clientId?: string; courierId?: string; status?: OrderStatus }): Promise<Order[]> {
+  async getOrders(filters?: { clientId?: string; courierId?: string; status?: OrderStatus; includeDeleted?: boolean }): Promise<Order[]> {
     let orders = Array.from(this.orders.values());
+    if (!filters?.includeDeleted) {
+      orders = orders.filter(o => !o.deletedAt);
+    }
     if (filters?.clientId) orders = orders.filter(o => o.clientId === filters.clientId);
     if (filters?.courierId) orders = orders.filter(o => o.courierId === filters.courierId);
     if (filters?.status) orders = orders.filter(o => o.status === filters.status);
@@ -327,7 +365,8 @@ export class MemStorage implements IStorage {
       status: "created",
       price: order.price || 500,
       createdAt: new Date().toISOString(),
-      completedAt: null
+      completedAt: null,
+      deletedAt: null
     };
     this.orders.set(id, newOrder);
     this.orderEvents.set(id, []);
@@ -377,7 +416,7 @@ export class MemStorage implements IStorage {
 
   async assignCourier(orderId: string, courierId: string, performedBy: string): Promise<Order | undefined> {
     const order = this.orders.get(orderId);
-    if (!order) return undefined;
+    if (!order || order.deletedAt) return undefined;
     
     order.courierId = courierId;
     order.status = "assigned";
@@ -389,6 +428,14 @@ export class MemStorage implements IStorage {
       metadata: { courierId }
     });
 
+    return order;
+  }
+
+  async softDeleteOrder(orderId: string): Promise<Order | undefined> {
+    const order = this.orders.get(orderId);
+    if (!order) return undefined;
+    order.deletedAt = new Date().toISOString();
+    this.orders.set(orderId, order);
     return order;
   }
 
