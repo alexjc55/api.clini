@@ -12,6 +12,9 @@ info:
     - **JWT Auth**: Access + Refresh токены
     - **Idempotency**: POST-запросы поддерживают `Idempotency-Key` заголовок
     - **Request Tracking**: Все запросы имеют `X-Request-Id` для логирования
+    - **Webhooks**: Real-time уведомления для партнёров с HMAC-SHA256 подписью
+    - **Feature Flags**: Глобальные флаги для постепенного раскатывания функций
+    - **Sandbox Mode**: Изолированное тестовое окружение через `X-Environment: sandbox`
     
     ## Аутентификация
     Все защищённые endpoints требуют заголовок:
@@ -25,6 +28,7 @@ info:
     | `X-Request-Id` | ID запроса для трассировки (генерируется если не передан) | `550e8400-e29b-41d4-a716-446655440000` |
     | `Idempotency-Key` | Ключ идемпотентности для POST (предотвращает дубли) | `uuid-v4` |
     | `Accept-Language` | Предпочитаемый язык ответа | `he`, `ru`, `ar`, `en` |
+    | `X-Environment` | Режим окружения | `production`, `sandbox` |
     
     ## Формат ошибок (Immutable Contract)
     ```json
@@ -94,6 +98,12 @@ tags:
     description: Стрики для удержания пользователей (gamification)
   - name: features
     description: Разблокировка функций (gamification)
+  - name: webhooks
+    description: Вебхуки для партнёров и ERP
+  - name: system-flags
+    description: Системные feature flags
+  - name: sandbox
+    description: Sandbox режим для тестирования
 
 paths:
   /health:
@@ -417,6 +427,419 @@ paths:
                     code:
                       type: string
                       enum: [level, manual, promo]
+
+  /meta/webhook-event-types:
+    get:
+      tags: [system]
+      summary: Типы событий для webhooks
+      responses:
+        '200':
+          description: Список типов событий
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [order.created, order.completed, order.cancelled, order.assigned, subscription.created, bonus.earned, bonus.redeemed]
+
+  /meta/feature-flag-keys:
+    get:
+      tags: [system]
+      summary: Ключи системных feature flags
+      responses:
+        '200':
+          description: Список ключей флагов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    key:
+                      type: string
+                      example: "new_checkout_flow"
+
+  /meta/environment-modes:
+    get:
+      tags: [system]
+      summary: Режимы окружения
+      responses:
+        '200':
+          description: Список режимов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [production, sandbox]
+
+  /environment:
+    get:
+      tags: [sandbox]
+      summary: Текущий режим окружения
+      description: Возвращает текущий режим окружения на основе заголовка X-Environment
+      responses:
+        '200':
+          description: Информация об окружении
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                    enum: [production, sandbox]
+                  isSandbox:
+                    type: boolean
+
+  /webhooks:
+    get:
+      tags: [webhooks]
+      summary: Список webhooks
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список зарегистрированных webhooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+    post:
+      tags: [webhooks]
+      summary: Создать webhook
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: URL для доставки событий
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [order.created, order.completed, order.cancelled, order.assigned, subscription.created, bonus.earned, bonus.redeemed]
+                  description: Типы событий для подписки
+                metadata:
+                  type: object
+                  description: Дополнительные метаданные
+      responses:
+        '201':
+          description: Webhook создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+  /webhooks/{id}:
+    get:
+      tags: [webhooks]
+      summary: Получить webhook по ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '404':
+          description: Webhook не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags: [webhooks]
+      summary: Обновить webhook
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                events:
+                  type: array
+                  items:
+                    type: string
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Webhook обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+    delete:
+      tags: [webhooks]
+      summary: Удалить webhook
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook удалён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "deleted"
+
+  /webhooks/{id}/test:
+    post:
+      tags: [webhooks]
+      summary: Отправить тестовое событие
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Тестовое событие отправлено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  delivery:
+                    $ref: '#/components/schemas/WebhookDelivery'
+
+  /webhooks/{id}/deliveries:
+    get:
+      tags: [webhooks]
+      summary: История доставок webhook
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список доставок
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookDelivery'
+
+  /flags:
+    get:
+      tags: [system-flags]
+      summary: Список системных feature flags
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Все флаги
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeatureFlag'
+    post:
+      tags: [system-flags]
+      summary: Создать feature flag
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, enabled]
+              properties:
+                key:
+                  type: string
+                  description: Уникальный ключ флага
+                enabled:
+                  type: boolean
+                rolloutPercentage:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  default: 100
+                targetUserTypes:
+                  type: array
+                  items:
+                    type: string
+                    enum: [client, courier, staff]
+                metadata:
+                  type: object
+      responses:
+        '201':
+          description: Флаг создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureFlag'
+
+  /flags/{key}:
+    get:
+      tags: [system-flags]
+      summary: Получить флаг по ключу
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Флаг найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureFlag'
+        '404':
+          description: Флаг не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags: [system-flags]
+      summary: Обновить флаг
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                rolloutPercentage:
+                  type: integer
+                targetUserTypes:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Флаг обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureFlag'
+    delete:
+      tags: [system-flags]
+      summary: Удалить флаг
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Флаг удалён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "deleted"
+
+  /flags/{key}/check:
+    get:
+      tags: [system-flags]
+      summary: Проверить доступ к функции для пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Результат проверки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
 
   /levels:
     get:
@@ -2395,3 +2818,100 @@ components:
         platform:
           type: string
           description: Платформа (ios, android, web)
+
+    # ==================== WEBHOOKS & FLAGS ====================
+
+    Webhook:
+      type: object
+      description: Webhook для получения событий
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+          description: URL для доставки событий
+        events:
+          type: array
+          items:
+            type: string
+            enum: [order.created, order.completed, order.cancelled, order.assigned, subscription.created, bonus.earned, bonus.redeemed]
+          description: Типы событий
+        secret:
+          type: string
+          description: Секрет для HMAC-SHA256 подписи (показывается только при создании)
+        enabled:
+          type: boolean
+          default: true
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    WebhookDelivery:
+      type: object
+      description: Запись о доставке webhook
+      properties:
+        id:
+          type: string
+          format: uuid
+        webhookId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        payload:
+          type: object
+        statusCode:
+          type: integer
+          nullable: true
+        response:
+          type: string
+          nullable: true
+        attempts:
+          type: integer
+        success:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    FeatureFlag:
+      type: object
+      description: Системный feature flag для постепенного раскатывания
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          description: Уникальный ключ флага
+        enabled:
+          type: boolean
+          description: Включён ли флаг глобально
+        rolloutPercentage:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Процент пользователей для раскатывания
+        targetUserTypes:
+          type: array
+          items:
+            type: string
+            enum: [client, courier, staff]
+          description: Целевые типы пользователей (пусто = все)
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
