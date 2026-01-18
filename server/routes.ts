@@ -23,7 +23,10 @@ import {
   insertPartnerSchema, partnerCategories, partnerStatuses,
   insertPartnerOfferSchema,
   insertOrderFinanceSnapshotSchema,
-  type ProductEventType, type EventActorType, type UserActivityType, type UserFlagKey, type BonusTransactionType
+  insertLevelSchema, levelCodes, insertProgressTransactionSchema, progressReasons,
+  insertFeatureSchema, featureCodes, insertUserFeatureAccessSchema, featureGrantTypes, streakTypes,
+  type ProductEventType, type EventActorType, type UserActivityType, type UserFlagKey, type BonusTransactionType,
+  type ProgressReason, type StreakType, type FeatureCode
 } from "@shared/schema";
 import { z } from "zod";
 import { L } from "./localization-keys";
@@ -1250,6 +1253,242 @@ export async function registerRoutes(
     const updated = await storage.updateOrderFinanceSnapshot(req.params.id, req.body);
     if (!updated) return sendError(res, 404, L.common.not_found);
     res.json({ status: "success", data: updated });
+  });
+
+  // ==================== GAMIFICATION ENDPOINTS ====================
+
+  // Meta endpoints for gamification
+  v1Router.get("/meta/level-codes", (_req, res) => {
+    res.json(levelCodes.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/progress-reasons", (_req, res) => {
+    res.json(progressReasons.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/streak-types", (_req, res) => {
+    res.json(streakTypes.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/feature-codes", (_req, res) => {
+    res.json(featureCodes.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/feature-grant-types", (_req, res) => {
+    res.json(featureGrantTypes.map(code => ({ code })));
+  });
+
+  // Levels (Admin management)
+  v1Router.get("/levels", async (_req, res) => {
+    const levels = await storage.getLevels();
+    res.json(levels);
+  });
+
+  v1Router.post("/levels", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    try {
+      const data = insertLevelSchema.parse(req.body);
+      const level = await storage.createLevel(data);
+      res.status(201).json({ status: "success", data: level });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.get("/levels/:code", async (req, res) => {
+    const level = await storage.getLevelByCode(req.params.code as any);
+    if (!level) return sendError(res, 404, L.common.not_found);
+    res.json(level);
+  });
+
+  // User Progress & Levels
+  v1Router.get("/users/:id/progress", authMiddleware, async (req, res) => {
+    if (req.user!.id !== req.params.id) {
+      const perms = await storage.getUserPermissions(req.user!.id);
+      if (!perms.includes("users.read")) {
+        return sendError(res, 403, L.common.forbidden);
+      }
+    }
+    const progress = await storage.getUserProgress(req.params.id);
+    const currentLevel = await storage.getUserLevel(req.params.id);
+    const levelDetails = currentLevel ? await storage.getLevel(currentLevel.levelId) : null;
+    res.json({ ...progress, currentLevel: levelDetails });
+  });
+
+  v1Router.post("/users/:id/progress", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    try {
+      const data = insertProgressTransactionSchema.parse(req.body);
+      const tx = await storage.createProgressTransaction(req.params.id, data);
+      res.status(201).json({ status: "success", data: tx });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.get("/users/:id/progress/transactions", authMiddleware, async (req, res) => {
+    if (req.user!.id !== req.params.id) {
+      const perms = await storage.getUserPermissions(req.user!.id);
+      if (!perms.includes("users.read")) {
+        return sendError(res, 403, L.common.forbidden);
+      }
+    }
+    const reason = getQueryParam(req, "reason") as ProgressReason | undefined;
+    const from = getQueryParam(req, "from");
+    const to = getQueryParam(req, "to");
+    const transactions = await storage.getProgressTransactions(req.params.id, { reason, from, to });
+    res.json(transactions);
+  });
+
+  v1Router.get("/users/:id/level", authMiddleware, async (req, res) => {
+    if (req.user!.id !== req.params.id) {
+      const perms = await storage.getUserPermissions(req.user!.id);
+      if (!perms.includes("users.read")) {
+        return sendError(res, 403, L.common.forbidden);
+      }
+    }
+    const userLevel = await storage.getUserLevel(req.params.id);
+    if (!userLevel) {
+      return res.json({ currentLevel: null, history: [] });
+    }
+    const level = await storage.getLevel(userLevel.levelId);
+    const history = await storage.getUserLevelHistory(req.params.id);
+    res.json({ currentLevel: level, achievedAt: userLevel.achievedAt, history });
+  });
+
+  v1Router.post("/users/:id/level", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    try {
+      const { levelId } = req.body;
+      if (!levelId) {
+        return sendError(res, 400, L.common.validation_error, { details: "levelId required" });
+      }
+      const level = await storage.getLevel(levelId);
+      if (!level) return sendError(res, 404, L.common.not_found);
+      
+      const userLevel = await storage.createUserLevel(req.params.id, { levelId, current: true });
+      res.status(201).json({ status: "success", data: { userLevel, level } });
+    } catch (err) {
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  // Streaks
+  v1Router.get("/users/:id/streaks", authMiddleware, async (req, res) => {
+    if (req.user!.id !== req.params.id) {
+      const perms = await storage.getUserPermissions(req.user!.id);
+      if (!perms.includes("users.read")) {
+        return sendError(res, 403, L.common.forbidden);
+      }
+    }
+    const streaks = await storage.getUserStreaks(req.params.id);
+    res.json(streaks);
+  });
+
+  v1Router.get("/users/:id/streaks/:type", authMiddleware, async (req, res) => {
+    if (req.user!.id !== req.params.id) {
+      const perms = await storage.getUserPermissions(req.user!.id);
+      if (!perms.includes("users.read")) {
+        return sendError(res, 403, L.common.forbidden);
+      }
+    }
+    const streak = await storage.getUserStreak(req.params.id, req.params.type as StreakType);
+    if (!streak) {
+      return res.json({ userId: req.params.id, type: req.params.type, currentCount: 0, maxCount: 0 });
+    }
+    res.json(streak);
+  });
+
+  v1Router.post("/users/:id/streaks/:type/increment", authMiddleware, async (req, res) => {
+    if (req.user!.id !== req.params.id) {
+      const perms = await storage.getUserPermissions(req.user!.id);
+      if (!perms.includes("users.manage")) {
+        return sendError(res, 403, L.common.forbidden);
+      }
+    }
+    const streak = await storage.incrementStreak(req.params.id, req.params.type as StreakType);
+    res.json({ status: "success", data: streak });
+  });
+
+  v1Router.post("/users/:id/streaks/:type/reset", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const streak = await storage.resetStreak(req.params.id, req.params.type as StreakType);
+    res.json({ status: "success", data: streak });
+  });
+
+  // Features (Admin management)
+  v1Router.get("/features", async (_req, res) => {
+    const features = await storage.getFeatures();
+    res.json(features);
+  });
+
+  v1Router.post("/features", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    try {
+      const data = insertFeatureSchema.parse(req.body);
+      const feature = await storage.createFeature(data);
+      res.status(201).json({ status: "success", data: feature });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.get("/features/:code", async (req, res) => {
+    const feature = await storage.getFeatureByCode(req.params.code as FeatureCode);
+    if (!feature) return sendError(res, 404, L.common.not_found);
+    res.json(feature);
+  });
+
+  // User Feature Access
+  v1Router.get("/users/:id/features", authMiddleware, async (req, res) => {
+    if (req.user!.id !== req.params.id) {
+      const perms = await storage.getUserPermissions(req.user!.id);
+      if (!perms.includes("users.read")) {
+        return sendError(res, 403, L.common.forbidden);
+      }
+    }
+    const accessList = await storage.getUserFeatureAccess(req.params.id);
+    const featuresWithDetails = await Promise.all(
+      accessList.map(async (a) => {
+        const feature = await storage.getFeature(a.featureId);
+        return { ...a, feature };
+      })
+    );
+    res.json(featuresWithDetails);
+  });
+
+  v1Router.get("/users/:id/features/:code", authMiddleware, async (req, res) => {
+    if (req.user!.id !== req.params.id) {
+      const perms = await storage.getUserPermissions(req.user!.id);
+      if (!perms.includes("users.read")) {
+        return sendError(res, 403, L.common.forbidden);
+      }
+    }
+    const hasAccess = await storage.hasFeatureAccess(req.params.id, req.params.code as FeatureCode);
+    res.json({ featureCode: req.params.code, hasAccess });
+  });
+
+  v1Router.post("/users/:id/features", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    try {
+      const data = insertUserFeatureAccessSchema.parse(req.body);
+      const access = await storage.grantFeatureAccess(req.params.id, data);
+      res.status(201).json({ status: "success", data: access });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.delete("/users/:id/features/:featureId", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const success = await storage.revokeFeatureAccess(req.params.id, req.params.featureId);
+    if (!success) return sendError(res, 404, L.common.not_found);
+    res.json({ status: "success" });
   });
 
   // ==================== END V2 ENDPOINTS ====================

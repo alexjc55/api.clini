@@ -12,7 +12,13 @@ import type {
   SubscriptionPlan, InsertSubscriptionPlan,
   Partner, InsertPartner, PartnerCategory, PartnerStatus,
   PartnerOffer, InsertPartnerOffer,
-  OrderFinanceSnapshot, InsertOrderFinanceSnapshot
+  OrderFinanceSnapshot, InsertOrderFinanceSnapshot,
+  Level, InsertLevel, LevelCode,
+  UserLevel, InsertUserLevel,
+  UserProgress, ProgressTransaction, InsertProgressTransaction, ProgressReason,
+  UserStreak, UpdateStreak, StreakType,
+  Feature, InsertFeature, FeatureCode,
+  UserFeatureAccess, InsertUserFeatureAccess
 } from "@shared/schema";
 
 export interface IUserRepository {
@@ -156,6 +162,49 @@ export interface IOrderFinanceRepository {
   updateOrderFinanceSnapshot(orderId: string, updates: Partial<InsertOrderFinanceSnapshot>): Promise<OrderFinanceSnapshot | undefined>;
 }
 
+// ==================== GAMIFICATION REPOSITORIES ====================
+
+export interface ILevelRepository {
+  getLevel(id: string): Promise<Level | undefined>;
+  getLevelByCode(code: LevelCode): Promise<Level | undefined>;
+  getLevels(): Promise<Level[]>;
+  createLevel(level: InsertLevel): Promise<Level>;
+}
+
+export interface IUserLevelRepository {
+  getUserLevel(userId: string): Promise<UserLevel | undefined>;
+  getUserLevelHistory(userId: string): Promise<UserLevel[]>;
+  createUserLevel(userId: string, userLevel: InsertUserLevel): Promise<UserLevel>;
+}
+
+export interface IProgressRepository {
+  getUserProgress(userId: string): Promise<UserProgress>;
+  createProgressTransaction(userId: string, tx: InsertProgressTransaction): Promise<ProgressTransaction>;
+  getProgressTransactions(userId: string, filters?: { reason?: ProgressReason; from?: string; to?: string }): Promise<ProgressTransaction[]>;
+}
+
+export interface IStreakRepository {
+  getUserStreak(userId: string, type: StreakType): Promise<UserStreak | undefined>;
+  getUserStreaks(userId: string): Promise<UserStreak[]>;
+  updateStreak(userId: string, type: StreakType, updates: UpdateStreak): Promise<UserStreak>;
+  incrementStreak(userId: string, type: StreakType): Promise<UserStreak>;
+  resetStreak(userId: string, type: StreakType): Promise<UserStreak>;
+}
+
+export interface IFeatureRepository {
+  getFeature(id: string): Promise<Feature | undefined>;
+  getFeatureByCode(code: FeatureCode): Promise<Feature | undefined>;
+  getFeatures(): Promise<Feature[]>;
+  createFeature(feature: InsertFeature): Promise<Feature>;
+}
+
+export interface IUserFeatureAccessRepository {
+  getUserFeatureAccess(userId: string): Promise<UserFeatureAccess[]>;
+  hasFeatureAccess(userId: string, featureCode: FeatureCode): Promise<boolean>;
+  grantFeatureAccess(userId: string, access: InsertUserFeatureAccess): Promise<UserFeatureAccess>;
+  revokeFeatureAccess(userId: string, featureId: string): Promise<boolean>;
+}
+
 export interface IStorage extends 
   IUserRepository,
   IRoleRepository,
@@ -174,6 +223,12 @@ export interface IStorage extends
   ISubscriptionRepository,
   ISubscriptionPlanRepository,
   IPartnerRepository,
-  IOrderFinanceRepository {
+  IOrderFinanceRepository,
+  ILevelRepository,
+  IUserLevelRepository,
+  IProgressRepository,
+  IStreakRepository,
+  IFeatureRepository,
+  IUserFeatureAccessRepository {
   initDefaults(): Promise<void>;
 }

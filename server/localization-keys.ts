@@ -91,6 +91,16 @@ export const LOCALIZATION_KEYS = {
     missing_permission: "common.missing_permission",
     invalid_user_type: "common.invalid_user_type",
   },
+  gamification: {
+    level_achieved: "gamification.level_achieved",
+    points_earned: "gamification.points_earned",
+    streak_updated: "gamification.streak_updated",
+    streak_reset: "gamification.streak_reset",
+    feature_unlocked: "gamification.feature_unlocked",
+    feature_access_revoked: "gamification.feature_access_revoked",
+    level_not_found: "gamification.level_not_found",
+    feature_not_found: "gamification.feature_not_found",
+  },
 } as const;
 
 export const L = LOCALIZATION_KEYS;

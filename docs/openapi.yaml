@@ -56,6 +56,12 @@ tags:
     description: Партнёры и маркетплейс (v2)
   - name: finance
     description: Финансовые снимки заказов (v2)
+  - name: levels
+    description: Уровни и система прогресса (gamification)
+  - name: streaks
+    description: Стрики для удержания пользователей (gamification)
+  - name: features
+    description: Разблокировка функций (gamification)
 
 paths:
   /health:
@@ -289,6 +295,579 @@ paths:
                   properties:
                     code:
                       type: string
+
+  /meta/level-codes:
+    get:
+      tags: [system]
+      summary: Коды уровней (gamification)
+      responses:
+        '200':
+          description: Список кодов уровней
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [bronze, silver, gold, platinum]
+
+  /meta/progress-reasons:
+    get:
+      tags: [system]
+      summary: Причины начисления очков (gamification)
+      responses:
+        '200':
+          description: Список причин начисления очков
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [daily_order, shabbat_order, streak_3, streak_7, streak_14, streak_30, month_perfect, referral, first_order, subscription_started, manual_adjust]
+
+  /meta/streak-types:
+    get:
+      tags: [system]
+      summary: Типы стриков (gamification)
+      responses:
+        '200':
+          description: Список типов стриков
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [daily_cleanup, weekly_order, shabbat_order]
+
+  /meta/feature-codes:
+    get:
+      tags: [system]
+      summary: Коды функций (gamification)
+      responses:
+        '200':
+          description: Список кодов функций
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [shabbat_orders, bonus_marketplace, priority_courier, partner_offers, premium_support, analytics_dashboard]
+
+  /meta/feature-grant-types:
+    get:
+      tags: [system]
+      summary: Типы выдачи доступа к функциям (gamification)
+      responses:
+        '200':
+          description: Список типов выдачи доступа
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [level, manual, promo]
+
+  /levels:
+    get:
+      tags: [levels]
+      summary: Список уровней
+      responses:
+        '200':
+          description: Все уровни отсортированы по minPoints
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Level'
+    post:
+      tags: [levels]
+      summary: Создать уровень
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, nameKey, minPoints]
+              properties:
+                code:
+                  type: string
+                  enum: [bronze, silver, gold, platinum]
+                nameKey:
+                  type: string
+                minPoints:
+                  type: integer
+                benefits:
+                  type: object
+      responses:
+        '201':
+          description: Уровень создан
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Level'
+
+  /levels/{code}:
+    get:
+      tags: [levels]
+      summary: Получить уровень по коду
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Уровень
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Level'
+        '404':
+          description: Уровень не найден
+
+  /users/{id}/progress:
+    get:
+      tags: [levels]
+      summary: Прогресс пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Прогресс и текущий уровень
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/UserProgress'
+                  - type: object
+                    properties:
+                      currentLevel:
+                        $ref: '#/components/schemas/Level'
+    post:
+      tags: [levels]
+      summary: Добавить очки прогресса
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [points, reason]
+              properties:
+                points:
+                  type: integer
+                reason:
+                  type: string
+                  enum: [daily_order, shabbat_order, streak_3, streak_7, streak_14, streak_30, month_perfect, referral, first_order, subscription_started, manual_adjust]
+                referenceType:
+                  type: string
+                referenceId:
+                  type: string
+      responses:
+        '201':
+          description: Транзакция создана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/ProgressTransaction'
+
+  /users/{id}/progress/transactions:
+    get:
+      tags: [levels]
+      summary: История транзакций очков
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: reason
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список транзакций
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProgressTransaction'
+
+  /users/{id}/level:
+    get:
+      tags: [levels]
+      summary: Текущий уровень пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Уровень и история
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  currentLevel:
+                    $ref: '#/components/schemas/Level'
+                  achievedAt:
+                    type: string
+                  history:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserLevel'
+    post:
+      tags: [levels]
+      summary: Установить уровень пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [levelId]
+              properties:
+                levelId:
+                  type: string
+      responses:
+        '201':
+          description: Уровень установлен
+
+  /users/{id}/streaks:
+    get:
+      tags: [streaks]
+      summary: Все стрики пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список стриков
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserStreak'
+
+  /users/{id}/streaks/{type}:
+    get:
+      tags: [streaks]
+      summary: Конкретный стрик
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [daily_cleanup, weekly_order, shabbat_order]
+      responses:
+        '200':
+          description: Стрик
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStreak'
+
+  /users/{id}/streaks/{type}/increment:
+    post:
+      tags: [streaks]
+      summary: Увеличить стрик
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Стрик увеличен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/UserStreak'
+
+  /users/{id}/streaks/{type}/reset:
+    post:
+      tags: [streaks]
+      summary: Сбросить стрик
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Стрик сброшен
+
+  /features:
+    get:
+      tags: [features]
+      summary: Список функций
+      responses:
+        '200':
+          description: Все функции
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Feature'
+    post:
+      tags: [features]
+      summary: Создать функцию
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, descriptionKey]
+              properties:
+                code:
+                  type: string
+                  enum: [shabbat_orders, bonus_marketplace, priority_courier, partner_offers, premium_support, analytics_dashboard]
+                descriptionKey:
+                  type: string
+      responses:
+        '201':
+          description: Функция создана
+
+  /features/{code}:
+    get:
+      tags: [features]
+      summary: Получить функцию по коду
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Функция
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Feature'
+        '404':
+          description: Не найдено
+
+  /users/{id}/features:
+    get:
+      tags: [features]
+      summary: Доступные функции пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список доступов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/UserFeatureAccess'
+                    - type: object
+                      properties:
+                        feature:
+                          $ref: '#/components/schemas/Feature'
+    post:
+      tags: [features]
+      summary: Выдать доступ к функции
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [featureId, grantedBy]
+              properties:
+                featureId:
+                  type: string
+                grantedBy:
+                  type: string
+                  enum: [level, manual, promo]
+                expiresAt:
+                  type: string
+      responses:
+        '201':
+          description: Доступ выдан
+
+  /users/{id}/features/{code}:
+    get:
+      tags: [features]
+      summary: Проверить доступ к функции
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Статус доступа
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  featureCode:
+                    type: string
+                  hasAccess:
+                    type: boolean
+
+  /users/{id}/features/{featureId}:
+    delete:
+      tags: [features]
+      summary: Отозвать доступ к функции
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: featureId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Доступ отозван
+        '404':
+          description: Не найдено
 
   /auth/register:
     post:
@@ -1573,6 +2152,137 @@ components:
         currency:
           type: string
           default: ILS
+        createdAt:
+          type: string
+          format: date-time
+
+    # ==================== GAMIFICATION SCHEMAS ====================
+
+    Level:
+      type: object
+      description: Определение уровня
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          enum: [bronze, silver, gold, platinum]
+        nameKey:
+          type: string
+        minPoints:
+          type: integer
+        benefits:
+          type: object
+          description: Привилегии уровня (скидки, доступ к функциям и т.д.)
+        createdAt:
+          type: string
+          format: date-time
+
+    UserLevel:
+      type: object
+      description: Текущий уровень пользователя
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        levelId:
+          type: string
+        achievedAt:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+
+    UserProgress:
+      type: object
+      description: Прогресс пользователя (общее количество очков)
+      properties:
+        userId:
+          type: string
+        totalPoints:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProgressTransaction:
+      type: object
+      description: Транзакция начисления/списания очков
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        points:
+          type: integer
+        reason:
+          type: string
+          enum: [daily_order, shabbat_order, streak_3, streak_7, streak_14, streak_30, month_perfect, referral, first_order, subscription_started, manual_adjust]
+        referenceType:
+          type: string
+          nullable: true
+        referenceId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    UserStreak:
+      type: object
+      description: Стрик пользователя (серия непрерывных действий)
+      properties:
+        userId:
+          type: string
+        type:
+          type: string
+          enum: [daily_cleanup, weekly_order, shabbat_order]
+        currentCount:
+          type: integer
+        maxCount:
+          type: integer
+        lastActionDate:
+          type: string
+          format: date
+
+    Feature:
+      type: object
+      description: Определение функции для разблокировки
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          enum: [shabbat_orders, bonus_marketplace, priority_courier, partner_offers, premium_support, analytics_dashboard]
+        descriptionKey:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    UserFeatureAccess:
+      type: object
+      description: Доступ пользователя к функции
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        featureId:
+          type: string
+        grantedBy:
+          type: string
+          enum: [level, manual, promo]
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time

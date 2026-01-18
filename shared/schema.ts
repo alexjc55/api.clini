@@ -552,3 +552,133 @@ export const insertOrderFinanceSnapshotSchema = z.object({
   platformFee: z.number().default(0),
 });
 export type InsertOrderFinanceSnapshot = z.infer<typeof insertOrderFinanceSnapshotSchema>;
+
+// ==================== GAMIFICATION ====================
+
+// Level codes (progression tiers)
+export const levelCodes = ["bronze", "silver", "gold", "platinum"] as const;
+export type LevelCode = (typeof levelCodes)[number];
+
+// Level definition
+export interface Level {
+  id: string;
+  code: LevelCode;
+  nameKey: string;
+  minPoints: number;
+  benefits: Record<string, unknown>;
+  createdAt: string;
+}
+
+export const insertLevelSchema = z.object({
+  code: z.enum(levelCodes),
+  nameKey: z.string(),
+  minPoints: z.number().min(0),
+  benefits: z.record(z.unknown()).default({}),
+});
+export type InsertLevel = z.infer<typeof insertLevelSchema>;
+
+// User's current level
+export interface UserLevel {
+  id: string;
+  userId: string;
+  levelId: string;
+  achievedAt: string;
+  current: boolean;
+}
+
+export const insertUserLevelSchema = z.object({
+  levelId: z.string().uuid(),
+  current: z.boolean().default(true),
+});
+export type InsertUserLevel = z.infer<typeof insertUserLevelSchema>;
+
+// User progress (total points)
+export interface UserProgress {
+  userId: string;
+  totalPoints: number;
+  updatedAt: string;
+}
+
+// Progress transaction reasons
+export const progressReasons = [
+  "daily_order", "shabbat_order", "streak_3", "streak_7", "streak_14", "streak_30",
+  "month_perfect", "referral", "first_order", "subscription_started", "manual_adjust"
+] as const;
+export type ProgressReason = (typeof progressReasons)[number];
+
+export interface ProgressTransaction {
+  id: string;
+  userId: string;
+  points: number;
+  reason: ProgressReason;
+  referenceType: string | null;
+  referenceId: string | null;
+  createdAt: string;
+}
+
+export const insertProgressTransactionSchema = z.object({
+  points: z.number(),
+  reason: z.enum(progressReasons),
+  referenceType: z.string().nullable().optional(),
+  referenceId: z.string().uuid().nullable().optional(),
+});
+export type InsertProgressTransaction = z.infer<typeof insertProgressTransactionSchema>;
+
+// Streak types
+export const streakTypes = ["daily_cleanup", "weekly_order", "shabbat_order"] as const;
+export type StreakType = (typeof streakTypes)[number];
+
+export interface UserStreak {
+  userId: string;
+  type: StreakType;
+  currentCount: number;
+  maxCount: number;
+  lastActionDate: string;
+}
+
+export const updateStreakSchema = z.object({
+  currentCount: z.number().min(0).optional(),
+  maxCount: z.number().min(0).optional(),
+  lastActionDate: z.string().optional(),
+});
+export type UpdateStreak = z.infer<typeof updateStreakSchema>;
+
+// Feature codes (unlockable features)
+export const featureCodes = [
+  "shabbat_orders", "bonus_marketplace", "priority_courier",
+  "partner_offers", "premium_support", "analytics_dashboard"
+] as const;
+export type FeatureCode = (typeof featureCodes)[number];
+
+export interface Feature {
+  id: string;
+  code: FeatureCode;
+  descriptionKey: string;
+  createdAt: string;
+}
+
+export const insertFeatureSchema = z.object({
+  code: z.enum(featureCodes),
+  descriptionKey: z.string(),
+});
+export type InsertFeature = z.infer<typeof insertFeatureSchema>;
+
+// Feature access grant types
+export const featureGrantTypes = ["level", "manual", "promo"] as const;
+export type FeatureGrantType = (typeof featureGrantTypes)[number];
+
+export interface UserFeatureAccess {
+  id: string;
+  userId: string;
+  featureId: string;
+  grantedBy: FeatureGrantType;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export const insertUserFeatureAccessSchema = z.object({
+  featureId: z.string().uuid(),
+  grantedBy: z.enum(featureGrantTypes),
+  expiresAt: z.string().nullable().optional(),
+});
+export type InsertUserFeatureAccess = z.infer<typeof insertUserFeatureAccessSchema>;

@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight, Send, Copy, Check, Key, Server, Shield, Users, Package, MapPin, Truck, Globe, Download, Activity, Flag, Gift, CalendarClock, Store, DollarSign } from "lucide-react";
+import { ChevronDown, ChevronRight, Send, Copy, Check, Key, Server, Shield, Users, Package, MapPin, Truck, Globe, Download, Activity, Flag, Gift, CalendarClock, Store, DollarSign, Trophy, Flame, Target, Unlock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Lang = "en" | "ru";
@@ -928,6 +928,174 @@ const apiSections: ApiSection[] = [
         permissions: ["payments.read"],
         requestBody: { courierPayout: 65 },
         responseExample: { status: "success", data: { id: "snapshot-uuid", orderId: "order-uuid", clientPrice: 100, courierPayout: 65, bonusSpent: 10, platformFee: 5, margin: 20, currency: "ILS" } }
+      }
+    ]
+  },
+  {
+    name: { en: "Levels & Progress", ru: "Уровни и прогресс" },
+    icon: Trophy,
+    description: { en: "User levels, points progression and level benefits", ru: "Уровни пользователей, прогресс очков и привилегии уровней" },
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/levels",
+        summary: { en: "List levels", ru: "Список уровней" },
+        description: { en: "Get all available levels with benefits", ru: "Получение всех доступных уровней с привилегиями" },
+        auth: false,
+        responseExample: [{ id: "level-uuid", code: "silver", nameKey: "level.silver.name", minPoints: 50, benefits: { discount_percent: 5, shabbat_access: true }, createdAt: "2026-01-18T10:30:00Z" }]
+      },
+      {
+        method: "POST",
+        path: "/api/v1/levels",
+        summary: { en: "Create level", ru: "Создать уровень" },
+        description: { en: "Create new level definition (staff only)", ru: "Создание нового уровня (только персонал)" },
+        auth: true,
+        permissions: ["users.manage"],
+        requestBody: { code: "gold", nameKey: "level.gold.name", minPoints: 100, benefits: { discount_percent: 10, priority_courier: true } },
+        responseExample: { status: "success", data: { id: "level-uuid", code: "gold", nameKey: "level.gold.name", minPoints: 100, benefits: { discount_percent: 10, priority_courier: true } } }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/progress",
+        summary: { en: "Get user progress", ru: "Получить прогресс" },
+        description: { en: "Get user's total points and current level", ru: "Получение общего количества очков и текущего уровня пользователя" },
+        auth: true,
+        responseExample: { userId: "user-uuid", totalPoints: 75, updatedAt: "2026-01-18T10:30:00Z", currentLevel: { id: "level-uuid", code: "silver", nameKey: "level.silver.name", minPoints: 50 } }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/users/:id/progress",
+        summary: { en: "Add points", ru: "Добавить очки" },
+        description: { en: "Add progress points to user (staff only)", ru: "Добавление очков прогресса пользователю (только персонал)" },
+        auth: true,
+        permissions: ["users.manage"],
+        requestBody: { points: 5, reason: "daily_order", referenceType: "order", referenceId: "order-uuid" },
+        responseExample: { status: "success", data: { id: "tx-uuid", userId: "user-uuid", points: 5, reason: "daily_order", referenceType: "order", referenceId: "order-uuid", createdAt: "2026-01-18T10:30:00Z" } }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/progress/transactions",
+        summary: { en: "Points history", ru: "История очков" },
+        description: { en: "Get user's points transaction history. Filters: ?reason, ?from, ?to", ru: "Получение истории транзакций очков пользователя. Фильтры: ?reason, ?from, ?to" },
+        auth: true,
+        responseExample: [{ id: "tx-uuid", userId: "user-uuid", points: 5, reason: "daily_order", referenceType: "order", referenceId: "order-uuid", createdAt: "2026-01-18T10:30:00Z" }]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/level",
+        summary: { en: "Get user level", ru: "Получить уровень" },
+        description: { en: "Get user's current level and history", ru: "Получение текущего уровня пользователя и истории" },
+        auth: true,
+        responseExample: { currentLevel: { id: "level-uuid", code: "silver", nameKey: "level.silver.name", minPoints: 50, benefits: {} }, achievedAt: "2026-01-15T10:30:00Z", history: [] }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/users/:id/level",
+        summary: { en: "Set user level", ru: "Установить уровень" },
+        description: { en: "Manually set user's level (staff only)", ru: "Ручная установка уровня пользователя (только персонал)" },
+        auth: true,
+        permissions: ["users.manage"],
+        requestBody: { levelId: "level-uuid" },
+        responseExample: { status: "success", data: { userLevel: { id: "ul-uuid", userId: "user-uuid", levelId: "level-uuid", achievedAt: "2026-01-18T10:30:00Z", current: true }, level: { id: "level-uuid", code: "gold" } } }
+      }
+    ]
+  },
+  {
+    name: { en: "Streaks", ru: "Стрики" },
+    icon: Flame,
+    description: { en: "User streaks for retention and engagement", ru: "Стрики пользователей для удержания и вовлечения" },
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/streaks",
+        summary: { en: "Get all streaks", ru: "Получить все стрики" },
+        description: { en: "Get all user's streaks", ru: "Получение всех стриков пользователя" },
+        auth: true,
+        responseExample: [{ userId: "user-uuid", type: "daily_cleanup", currentCount: 7, maxCount: 14, lastActionDate: "2026-01-18" }]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/streaks/:type",
+        summary: { en: "Get streak", ru: "Получить стрик" },
+        description: { en: "Get specific streak by type", ru: "Получение конкретного стрика по типу" },
+        auth: true,
+        responseExample: { userId: "user-uuid", type: "daily_cleanup", currentCount: 7, maxCount: 14, lastActionDate: "2026-01-18" }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/users/:id/streaks/:type/increment",
+        summary: { en: "Increment streak", ru: "Увеличить стрик" },
+        description: { en: "Increment streak count (auto-resets if day skipped)", ru: "Увеличение счётчика стрика (автосброс при пропуске дня)" },
+        auth: true,
+        responseExample: { status: "success", data: { userId: "user-uuid", type: "daily_cleanup", currentCount: 8, maxCount: 14, lastActionDate: "2026-01-18" } }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/users/:id/streaks/:type/reset",
+        summary: { en: "Reset streak", ru: "Сбросить стрик" },
+        description: { en: "Reset streak to zero (staff only)", ru: "Сброс стрика до нуля (только персонал)" },
+        auth: true,
+        permissions: ["users.manage"],
+        responseExample: { status: "success", data: { userId: "user-uuid", type: "daily_cleanup", currentCount: 0, maxCount: 14, lastActionDate: "2026-01-18" } }
+      }
+    ]
+  },
+  {
+    name: { en: "Feature Unlocks", ru: "Разблокировка функций" },
+    icon: Unlock,
+    description: { en: "Feature access control based on levels and promotions", ru: "Управление доступом к функциям на основе уровней и промо-акций" },
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/features",
+        summary: { en: "List features", ru: "Список функций" },
+        description: { en: "Get all available features", ru: "Получение всех доступных функций" },
+        auth: false,
+        responseExample: [{ id: "feature-uuid", code: "shabbat_orders", descriptionKey: "feature.shabbat.description", createdAt: "2026-01-18T10:30:00Z" }]
+      },
+      {
+        method: "POST",
+        path: "/api/v1/features",
+        summary: { en: "Create feature", ru: "Создать функцию" },
+        description: { en: "Create new feature definition (staff only)", ru: "Создание нового определения функции (только персонал)" },
+        auth: true,
+        permissions: ["users.manage"],
+        requestBody: { code: "bonus_marketplace", descriptionKey: "feature.bonus_marketplace.description" },
+        responseExample: { status: "success", data: { id: "feature-uuid", code: "bonus_marketplace", descriptionKey: "feature.bonus_marketplace.description" } }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/features",
+        summary: { en: "User features", ru: "Функции пользователя" },
+        description: { en: "Get user's unlocked features", ru: "Получение разблокированных функций пользователя" },
+        auth: true,
+        responseExample: [{ id: "access-uuid", userId: "user-uuid", featureId: "feature-uuid", grantedBy: "level", expiresAt: null, feature: { id: "feature-uuid", code: "shabbat_orders" } }]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/features/:code",
+        summary: { en: "Check feature access", ru: "Проверить доступ" },
+        description: { en: "Check if user has access to specific feature", ru: "Проверка доступа пользователя к конкретной функции" },
+        auth: true,
+        responseExample: { featureCode: "shabbat_orders", hasAccess: true }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/users/:id/features",
+        summary: { en: "Grant feature access", ru: "Выдать доступ" },
+        description: { en: "Grant feature access to user (staff only)", ru: "Выдача доступа к функции пользователю (только персонал)" },
+        auth: true,
+        permissions: ["users.manage"],
+        requestBody: { featureId: "feature-uuid", grantedBy: "promo", expiresAt: "2026-02-18T10:30:00Z" },
+        responseExample: { status: "success", data: { id: "access-uuid", userId: "user-uuid", featureId: "feature-uuid", grantedBy: "promo", expiresAt: "2026-02-18T10:30:00Z" } }
+      },
+      {
+        method: "DELETE",
+        path: "/api/v1/users/:id/features/:featureId",
+        summary: { en: "Revoke access", ru: "Отозвать доступ" },
+        description: { en: "Revoke feature access from user (staff only)", ru: "Отзыв доступа к функции у пользователя (только персонал)" },
+        auth: true,
+        permissions: ["users.manage"]
       }
     ]
   }

@@ -14,7 +14,13 @@ import type {
   SubscriptionPlan, InsertSubscriptionPlan,
   Partner, InsertPartner, PartnerCategory, PartnerStatus,
   PartnerOffer, InsertPartnerOffer,
-  OrderFinanceSnapshot, InsertOrderFinanceSnapshot
+  OrderFinanceSnapshot, InsertOrderFinanceSnapshot,
+  Level, InsertLevel, LevelCode,
+  UserLevel, InsertUserLevel,
+  UserProgress, ProgressTransaction, InsertProgressTransaction, ProgressReason,
+  UserStreak, UpdateStreak, StreakType,
+  Feature, InsertFeature, FeatureCode,
+  UserFeatureAccess, InsertUserFeatureAccess
 } from "@shared/schema";
 import { userActivityTypes } from "@shared/schema";
 import { IStorage } from "./repositories";
@@ -54,6 +60,15 @@ export class MemStorage implements IStorage {
   private partners: Map<string, Partner> = new Map();
   private partnerOffers: Map<string, PartnerOffer[]> = new Map();
   private orderFinanceSnapshots: Map<string, OrderFinanceSnapshot> = new Map();
+  
+  // Gamification Storage
+  private levels: Map<string, Level> = new Map();
+  private userLevels: Map<string, UserLevel[]> = new Map();
+  private userProgress: Map<string, UserProgress> = new Map();
+  private progressTransactions: Map<string, ProgressTransaction[]> = new Map();
+  private userStreaks: Map<string, Map<StreakType, UserStreak>> = new Map();
+  private features: Map<string, Feature> = new Map();
+  private userFeatureAccess: Map<string, UserFeatureAccess[]> = new Map();
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
@@ -902,6 +917,249 @@ export class MemStorage implements IStorage {
     snapshot.margin = snapshot.clientPrice - snapshot.courierPayout - snapshot.platformFee;
     this.orderFinanceSnapshots.set(orderId, snapshot);
     return snapshot;
+  }
+
+  // ==================== GAMIFICATION METHODS ====================
+
+  // Levels
+  async getLevel(id: string): Promise<Level | undefined> {
+    return this.levels.get(id);
+  }
+
+  async getLevelByCode(code: LevelCode): Promise<Level | undefined> {
+    return Array.from(this.levels.values()).find(l => l.code === code);
+  }
+
+  async getLevels(): Promise<Level[]> {
+    return Array.from(this.levels.values()).sort((a, b) => a.minPoints - b.minPoints);
+  }
+
+  async createLevel(level: InsertLevel): Promise<Level> {
+    const newLevel: Level = {
+      id: randomUUID(),
+      code: level.code,
+      nameKey: level.nameKey,
+      minPoints: level.minPoints,
+      benefits: level.benefits || {},
+      createdAt: new Date().toISOString()
+    };
+    this.levels.set(newLevel.id, newLevel);
+    return newLevel;
+  }
+
+  // User Levels
+  async getUserLevel(userId: string): Promise<UserLevel | undefined> {
+    const userLevelList = this.userLevels.get(userId) || [];
+    return userLevelList.find(ul => ul.current);
+  }
+
+  async getUserLevelHistory(userId: string): Promise<UserLevel[]> {
+    return this.userLevels.get(userId) || [];
+  }
+
+  async createUserLevel(userId: string, userLevel: InsertUserLevel): Promise<UserLevel> {
+    if (!this.userLevels.has(userId)) {
+      this.userLevels.set(userId, []);
+    }
+    const userLevelList = this.userLevels.get(userId)!;
+    
+    if (userLevel.current) {
+      userLevelList.forEach(ul => ul.current = false);
+    }
+    
+    const newUserLevel: UserLevel = {
+      id: randomUUID(),
+      userId,
+      levelId: userLevel.levelId,
+      achievedAt: new Date().toISOString(),
+      current: userLevel.current ?? true
+    };
+    userLevelList.push(newUserLevel);
+    return newUserLevel;
+  }
+
+  // Progress
+  async getUserProgress(userId: string): Promise<UserProgress> {
+    let progress = this.userProgress.get(userId);
+    if (!progress) {
+      progress = {
+        userId,
+        totalPoints: 0,
+        updatedAt: new Date().toISOString()
+      };
+      this.userProgress.set(userId, progress);
+    }
+    return progress;
+  }
+
+  async createProgressTransaction(userId: string, tx: InsertProgressTransaction): Promise<ProgressTransaction> {
+    const progress = await this.getUserProgress(userId);
+    progress.totalPoints += tx.points;
+    progress.updatedAt = new Date().toISOString();
+    this.userProgress.set(userId, progress);
+
+    const newTx: ProgressTransaction = {
+      id: randomUUID(),
+      userId,
+      points: tx.points,
+      reason: tx.reason,
+      referenceType: tx.referenceType || null,
+      referenceId: tx.referenceId || null,
+      createdAt: new Date().toISOString()
+    };
+    
+    if (!this.progressTransactions.has(userId)) {
+      this.progressTransactions.set(userId, []);
+    }
+    this.progressTransactions.get(userId)!.push(newTx);
+    return newTx;
+  }
+
+  async getProgressTransactions(userId: string, filters?: { reason?: ProgressReason; from?: string; to?: string }): Promise<ProgressTransaction[]> {
+    let transactions = this.progressTransactions.get(userId) || [];
+    if (filters?.reason) transactions = transactions.filter(t => t.reason === filters.reason);
+    if (filters?.from) transactions = transactions.filter(t => t.createdAt >= filters.from!);
+    if (filters?.to) transactions = transactions.filter(t => t.createdAt <= filters.to!);
+    return transactions.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  // Streaks
+  async getUserStreak(userId: string, type: StreakType): Promise<UserStreak | undefined> {
+    return this.userStreaks.get(userId)?.get(type);
+  }
+
+  async getUserStreaks(userId: string): Promise<UserStreak[]> {
+    const streakMap = this.userStreaks.get(userId);
+    if (!streakMap) return [];
+    return Array.from(streakMap.values());
+  }
+
+  async updateStreak(userId: string, type: StreakType, updates: UpdateStreak): Promise<UserStreak> {
+    if (!this.userStreaks.has(userId)) {
+      this.userStreaks.set(userId, new Map());
+    }
+    const streakMap = this.userStreaks.get(userId)!;
+    
+    let streak = streakMap.get(type);
+    if (!streak) {
+      streak = {
+        userId,
+        type,
+        currentCount: 0,
+        maxCount: 0,
+        lastActionDate: new Date().toISOString().split('T')[0]
+      };
+    }
+    
+    if (updates.currentCount !== undefined) streak.currentCount = updates.currentCount;
+    if (updates.maxCount !== undefined) streak.maxCount = updates.maxCount;
+    if (updates.lastActionDate !== undefined) streak.lastActionDate = updates.lastActionDate;
+    
+    if (streak.currentCount > streak.maxCount) {
+      streak.maxCount = streak.currentCount;
+    }
+    
+    streakMap.set(type, streak);
+    return streak;
+  }
+
+  async incrementStreak(userId: string, type: StreakType): Promise<UserStreak> {
+    const today = new Date().toISOString().split('T')[0];
+    const streak = await this.getUserStreak(userId, type);
+    
+    if (!streak) {
+      return this.updateStreak(userId, type, { currentCount: 1, lastActionDate: today });
+    }
+    
+    const lastDate = new Date(streak.lastActionDate);
+    const todayDate = new Date(today);
+    const diffDays = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return streak;
+    } else if (diffDays === 1) {
+      return this.updateStreak(userId, type, { 
+        currentCount: streak.currentCount + 1, 
+        lastActionDate: today 
+      });
+    } else {
+      return this.updateStreak(userId, type, { currentCount: 1, lastActionDate: today });
+    }
+  }
+
+  async resetStreak(userId: string, type: StreakType): Promise<UserStreak> {
+    return this.updateStreak(userId, type, { currentCount: 0 });
+  }
+
+  // Features
+  async getFeature(id: string): Promise<Feature | undefined> {
+    return this.features.get(id);
+  }
+
+  async getFeatureByCode(code: FeatureCode): Promise<Feature | undefined> {
+    return Array.from(this.features.values()).find(f => f.code === code);
+  }
+
+  async getFeatures(): Promise<Feature[]> {
+    return Array.from(this.features.values());
+  }
+
+  async createFeature(feature: InsertFeature): Promise<Feature> {
+    const newFeature: Feature = {
+      id: randomUUID(),
+      code: feature.code,
+      descriptionKey: feature.descriptionKey,
+      createdAt: new Date().toISOString()
+    };
+    this.features.set(newFeature.id, newFeature);
+    return newFeature;
+  }
+
+  // User Feature Access
+  async getUserFeatureAccess(userId: string): Promise<UserFeatureAccess[]> {
+    const now = new Date().toISOString();
+    const accessList = this.userFeatureAccess.get(userId) || [];
+    return accessList.filter(a => !a.expiresAt || a.expiresAt > now);
+  }
+
+  async hasFeatureAccess(userId: string, featureCode: FeatureCode): Promise<boolean> {
+    const feature = await this.getFeatureByCode(featureCode);
+    if (!feature) return false;
+    
+    const now = new Date().toISOString();
+    const accessList = this.userFeatureAccess.get(userId) || [];
+    return accessList.some(a => 
+      a.featureId === feature.id && (!a.expiresAt || a.expiresAt > now)
+    );
+  }
+
+  async grantFeatureAccess(userId: string, access: InsertUserFeatureAccess): Promise<UserFeatureAccess> {
+    if (!this.userFeatureAccess.has(userId)) {
+      this.userFeatureAccess.set(userId, []);
+    }
+    
+    const newAccess: UserFeatureAccess = {
+      id: randomUUID(),
+      userId,
+      featureId: access.featureId,
+      grantedBy: access.grantedBy,
+      expiresAt: access.expiresAt || null,
+      createdAt: new Date().toISOString()
+    };
+    
+    this.userFeatureAccess.get(userId)!.push(newAccess);
+    return newAccess;
+  }
+
+  async revokeFeatureAccess(userId: string, featureId: string): Promise<boolean> {
+    const accessList = this.userFeatureAccess.get(userId);
+    if (!accessList) return false;
+    
+    const idx = accessList.findIndex(a => a.featureId === featureId);
+    if (idx === -1) return false;
+    
+    accessList.splice(idx, 1);
+    return true;
   }
 
   async initDefaults(): Promise<void> {
