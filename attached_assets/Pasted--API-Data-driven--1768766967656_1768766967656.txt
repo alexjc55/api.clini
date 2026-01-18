@@ -1,0 +1,261 @@
+🎯 Цель доработок API
+
+Заложить фундамент для:
+
+Data-driven продукта (поведение, платежеспособность, ритм жизни)
+
+LTV > CAC через подписки, бонусы, апселлы
+
+Marketplace / super-app логики
+
+Международного масштабирования
+
+Возможности продать компанию / долю не как «сервис мусора», а как платформу urban services
+
+1️⃣ Event-based архитектура (КРИТИЧНО)
+
+У тебя уже есть AuditLog — это отлично, но это не events.
+
+🔹 Зачем
+
+Поведение пользователя
+
+Триггеры (бонусы, офферы, сегменты)
+
+ML / рекомендации в будущем
+
+Интеграция партнёров без лома API
+
+🔹 Что добавить
+📦 Новая сущность: Event
+Event {
+  id: uuid
+  type: string              // order.created, order.completed, bonus.earned
+  actorType: 'client' | 'courier' | 'system'
+  actorId: uuid | null
+  entityType: string | null // order, subscription, bonus
+  entityId: uuid | null
+  payload: jsonb            // любые данные
+  createdAt: timestamp
+}
+
+📌 Примеры событий
+order.created
+order.completed
+order.completed.shabbat
+subscription.started
+subscription.paused
+bonus.earned
+bonus.redeemed
+courier.batch.completed
+user.segment.entered
+
+🔌 Генерация
+
+Синхронно при действии
+
+Или async (через очередь позже)
+
+⚠️ Важно:
+AuditLog = юридический лог
+Event = продуктовая аналитика
+
+НЕ смешивать
+
+2️⃣ История действий пользователя (Behavior History)
+
+AuditLog — для ERP
+Тебе нужна Customer Timeline
+
+🔹 Новая сущность: UserActivity
+UserActivity {
+  id: uuid
+  userId: uuid
+  eventType: string
+  referenceType: string | null
+  referenceId: uuid | null
+  metadata: jsonb
+  createdAt: timestamp
+}
+
+📌 Примеры
+
+ежедневный вынос
+
+пропуск дня
+
+отмена
+
+вызов в шаббат
+
+чаевые
+
+вход в приложение
+
+👉 Это золото для сегментации
+
+3️⃣ Сегменты и флаги (Feature / Segment Flags)
+
+Ты обязан заложить это сейчас, даже если не используешь.
+
+🔹 Сущность: UserFlag
+UserFlag {
+  id: uuid
+  userId: uuid
+  key: string          // high_ltv, shabbat_user, price_sensitive
+  value: boolean
+  source: 'system' | 'manual' | 'ml'
+  createdAt: timestamp
+}
+
+🔹 Примеры флагов
+
+daily_user
+
+shabbat_orders
+
+high_frequency
+
+no_tips
+
+premium_candidate
+
+churn_risk
+
+📌 Использование:
+
+разные цены
+
+разные бонусы
+
+разные офферы
+
+разные партнёрские предложения
+
+4️⃣ Бонусы — как полноценная экономика (НЕ просто баллы)
+
+Ты абсолютно прав — бонусы ≠ маркетинг
+Бонусы = внутренняя валюта
+
+🔹 Сущности
+🎁 BonusAccount
+BonusAccount {
+  userId: uuid
+  balance: int
+  updatedAt: timestamp
+}
+
+📜 BonusTransaction
+BonusTransaction {
+  id: uuid
+  userId: uuid
+  type: 'earn' | 'spend' | 'expire'
+  amount: int
+  reason: string        // daily_streak, partner_service
+  referenceType: string | null
+  referenceId: uuid | null
+  createdAt: timestamp
+}
+
+🔹 Почему это критично
+
+Можно платить курьеру бонусами
+
+Можно оплачивать партнёров
+
+Можно стимулировать нужное поведение
+
+Можно монетизировать вне мусора
+
+5️⃣ Подписки: не как «пакет», а как генератор событий
+
+Не просто Subscription → Orders
+А Subscription → Rules → Events
+
+🔹 Subscription
+Subscription {
+  id: uuid
+  userId: uuid
+  planId: uuid
+  status: active | paused | cancelled
+  startedAt
+  nextBillingAt
+}
+
+🔹 SubscriptionRule
+SubscriptionRule {
+  subscriptionId
+  type: 'daily' | 'weekdays' | 'custom'
+  timeWindow
+  priceModifier     // +0 / +shabbat / +night
+}
+
+
+📌 Это позволит:
+
+гибкие планы
+
+шаббат как отдельную логику
+
+dynamic pricing позже
+
+6️⃣ Marketplace / Partner API (заглушка СЕЙЧАС)
+
+Даже если нет партнёров.
+
+🔹 Partner
+Partner {
+  id
+  name
+  category      // cleaning, pets, moving
+  status
+}
+
+🔹 PartnerOffer
+PartnerOffer {
+  id
+  partnerId
+  titleKey
+  descriptionKey
+  price
+  bonusPrice
+  availableForSegments: string[]
+}
+
+
+📌 Позже:
+
+химчистка
+
+клининг
+
+pet services
+
+доставка воды
+
+страховки
+
+интернет / сотовая связь
+
+7️⃣ Финансовая аналитика (НЕ бухгалтерия)
+
+Тебе нужен юнит-экономический слой
+
+🔹 OrderFinanceSnapshot
+OrderFinanceSnapshot {
+  orderId
+  clientPrice
+  courierPayout
+  bonusSpent
+  margin
+  createdAt
+}
+
+
+Это позволит:
+
+показывать инвестору экономику
+
+A/B цены
+
+сегментировать прибыльных клиентов
