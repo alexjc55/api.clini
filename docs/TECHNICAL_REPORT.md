@@ -20,7 +20,9 @@ This document provides a comprehensive technical overview of the Waste Collectio
 | API-First | OpenAPI 3.0 specification at `/api/v1/openapi.json` and `/api/v1/openapi.yaml` |
 | Stateless | JWT-based authentication, no server-side session state |
 | Modular | Feature-based organization, extensible without contract changes |
-| Event-Driven | Audit logging and analytics events for all operations |
+| Event-Driven | Audit logging, analytics events, and webhooks for all operations |
+| Feature Flags | Gradual rollouts with percentage control and user type targeting |
+| Sandbox Mode | Isolated test environment for partner integrations |
 
 ### Technology Stack
 
@@ -30,6 +32,8 @@ This document provides a comprehensive technical overview of the Waste Collectio
 - **Rate Limiting:** express-rate-limit
 - **Storage:** In-memory (MVP) with PostgreSQL-ready interfaces
 - **Validation:** Zod schemas with drizzle-zod
+- **Webhooks:** HMAC-SHA256 signed notifications
+- **Environment Isolation:** AsyncLocalStorage for request-scoped context
 
 ---
 
@@ -468,6 +472,180 @@ POST endpoints support `Idempotency-Key` header:
 - `409` - Conflict
 - `429` - Rate Limited
 - `500` - Server Error
+
+---
+
+## Webhooks
+
+### 16. Webhook System
+
+**Endpoints:**
+- `GET /webhooks` - List registered webhooks
+- `POST /webhooks` - Register new webhook
+- `GET /webhooks/:id` - Get webhook details
+- `PATCH /webhooks/:id` - Update webhook
+- `DELETE /webhooks/:id` - Delete webhook
+- `POST /webhooks/:id/test` - Send test event
+- `GET /webhooks/:id/deliveries` - Delivery history
+
+**Event Types:**
+| Event | Trigger |
+|-------|---------|
+| `order.created` | New order created |
+| `order.completed` | Order marked completed |
+| `order.cancelled` | Order cancelled |
+| `order.assigned` | Courier assigned to order |
+| `subscription.created` | New subscription created |
+| `bonus.earned` | Bonus points earned |
+| `bonus.redeemed` | Bonus points redeemed |
+
+**Security:**
+- HMAC-SHA256 signature in `X-Webhook-Signature` header
+- Secret generated per webhook registration
+- Signature format: `sha256=<hmac_hex>`
+
+**Delivery:**
+- Up to 3 retry attempts with exponential backoff
+- Delivery status tracking (statusCode, response, attempts)
+- Success/failure logging
+
+**Request Body:**
+```json
+{
+  "event": "order.completed",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "data": { ... }
+}
+```
+
+---
+
+## System Feature Flags
+
+### 17. Feature Flags API
+
+**Endpoints:**
+- `GET /flags` - List all feature flags
+- `POST /flags` - Create feature flag
+- `GET /flags/:key` - Get flag by key
+- `PATCH /flags/:key` - Update flag
+- `DELETE /flags/:key` - Delete flag
+- `GET /flags/:key/check?userId=` - Check if enabled for user
+
+**Flag Properties:**
+| Property | Type | Description |
+|----------|------|-------------|
+| `key` | string | Unique identifier |
+| `enabled` | boolean | Global on/off |
+| `rolloutPercentage` | integer (0-100) | Gradual rollout |
+| `targetUserTypes` | array | Target user types |
+| `metadata` | object | Additional config |
+
+**Rollout Logic:**
+1. Check if flag is globally enabled
+2. Check if user type matches target (if specified)
+3. Apply rollout percentage using consistent hashing
+
+**Use Cases:**
+- Gradual feature rollouts
+- A/B testing
+- Kill switches for problematic features
+- User type-specific features
+
+---
+
+## Sandbox Mode
+
+### 18. Sandbox Environment
+
+**Header:**
+```
+X-Environment: sandbox
+```
+
+**Behavior:**
+- Isolated storage for transactional data
+- Write restrictions enforced by middleware
+
+**Isolated Entities (sandbox-specific):**
+- Orders
+- Subscriptions
+- Bonus transactions
+
+**Shared Entities (read-only in sandbox):**
+- Users
+- Addresses
+- Couriers
+- Partners
+
+**Allowed Operations in Sandbox:**
+| Path Pattern | Methods |
+|--------------|---------|
+| `/orders/*` | All |
+| `/subscriptions/*` | All |
+| `/bonus/*` | All |
+| `/auth/*` | All |
+| `/sessions/*` | All |
+| `/environment` | GET |
+| `/meta/*` | GET |
+| `/flags/*` | All |
+
+**Blocked Operations:**
+All other write operations (POST, PATCH, PUT, DELETE) return:
+```json
+{
+  "error": {
+    "key": "sandbox.write_not_allowed"
+  }
+}
+```
+
+**Environment Endpoint:**
+- `GET /environment` - Returns current mode
+```json
+{
+  "mode": "sandbox",
+  "isSandbox": true
+}
+```
+
+**Meta Endpoint:**
+- `GET /meta/environment-modes` - Available modes
+
+---
+
+## Meta Endpoints (Updated)
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /meta/roles` | Available roles |
+| `GET /meta/permissions` | Available permissions |
+| `GET /meta/order-statuses` | Order statuses |
+| `GET /meta/bonus-types` | Bonus transaction types |
+| `GET /meta/bonus-reasons` | Bonus reasons |
+| `GET /meta/subscription-statuses` | Subscription statuses |
+| `GET /meta/level-codes` | Level codes |
+| `GET /meta/progress-reasons` | Progress reasons |
+| `GET /meta/streak-types` | Streak types |
+| `GET /meta/feature-codes` | Feature codes |
+| `GET /meta/feature-grant-types` | Feature grant types |
+| `GET /meta/webhook-event-types` | Webhook event types |
+| `GET /meta/feature-flag-keys` | System feature flag keys |
+| `GET /meta/environment-modes` | Environment modes |
+
+---
+
+## Standard Headers (Updated)
+
+| Header | Direction | Description |
+|--------|-----------|-------------|
+| `Authorization` | Request | Bearer token for authentication |
+| `Accept-Language` | Request | Preferred language (he, ru, ar, en) |
+| `X-Request-Id` | Both | Request tracking ID |
+| `Idempotency-Key` | Request | Idempotency for POST requests |
+| `X-Environment` | Request | Environment mode (production, sandbox) |
+| `X-Webhook-Signature` | Webhook | HMAC-SHA256 signature |
+| `X-Idempotency-Replayed` | Response | Indicates cached response |
 
 ---
 
