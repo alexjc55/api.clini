@@ -497,10 +497,12 @@ export class MemStorage implements IStorage {
     return Array.from(this.sessions.values()).filter(s => s.userId === userId);
   }
 
-  async updateSessionLastSeen(sessionId: string): Promise<void> {
+  async updateSessionLastSeen(sessionId: string, clientId?: string, clientType?: "mobile_client" | "courier_app" | "erp" | "partner" | "web"): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.lastSeenAt = new Date().toISOString();
+      if (clientId) session.clientId = clientId;
+      if (clientType) session.clientType = clientType;
       this.sessions.set(sessionId, session);
     }
   }

@@ -220,7 +220,7 @@ export async function registerRoutes(
 
   v1Router.post("/auth/refresh", authRateLimiter, async (req, res) => {
     try {
-      const { refreshToken, deviceId, platform } = req.body;
+      const { refreshToken, clientId, clientType } = req.body;
       if (!refreshToken) {
         return sendError(res, 400, L.common.bad_request, { field: "refreshToken" });
       }
@@ -232,7 +232,7 @@ export async function registerRoutes(
       }
       
       if (existingSession) {
-        await storage.updateSessionLastSeen(existingSession.id);
+        await storage.updateSessionLastSeen(existingSession.id, clientId, clientType);
       }
       
       res.json({
