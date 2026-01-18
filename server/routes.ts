@@ -3,18 +3,20 @@ import { createServer, type Server } from "http";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { generateTokens, refreshAccessToken, revokeUserTokens } from "./auth";
-import { authMiddleware, requirePermissions, requireUserType, sendError } from "./middleware";
+import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware } from "./middleware";
 import {
   insertUserSchema, loginSchema, insertAddressSchema, insertOrderSchema,
   updateOrderSchema, updateCourierProfileSchema, insertRoleSchema, orderStatuses,
   isValidStatusTransition, type OrderStatus
 } from "@shared/schema";
 import { z } from "zod";
+import { L } from "./localization-keys";
+import { sendLocalizedSuccess } from "./i18n";
 
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: { error: { code: "RATE_LIMIT", message: "Too many attempts, please try again later" } },
+  message: { error: { key: L.common.rate_limit_exceeded, params: {} } },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -25,6 +27,8 @@ export async function registerRoutes(
 ): Promise<Server> {
   
   await storage.initDefaults();
+  
+  app.use(i18nMiddleware);
 
   app.post("/api/auth/register", authRateLimiter, async (req, res) => {
     try {
@@ -32,18 +36,22 @@ export async function registerRoutes(
       
       const existing = await storage.getUserByPhone(data.phone);
       if (existing) {
-        return sendError(res, 409, "CONFLICT", "User with this phone already exists");
+        return sendError(res, 409, L.common.conflict, { field: "phone" });
       }
       
       const user = await storage.createUser(data);
       const tokens = generateTokens(user.id);
       
-      res.status(201).json(tokens);
+      res.status(201).json({
+        status: "success",
+        message: { key: L.auth.register_success, params: { userId: user.id } },
+        data: tokens
+      });
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return sendError(res, 400, "BAD_REQUEST", err.errors[0].message);
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
       }
-      return sendError(res, 500, "INTERNAL_ERROR", "Registration failed");
+      return sendError(res, 500, L.common.internal_error);
     }
   });
 
@@ -54,15 +62,15 @@ export async function registerRoutes(
       
       const user = await storage.verifyUserPassword(data.phone, data.password);
       if (!user) {
-        return sendError(res, 401, "UNAUTHORIZED", "Invalid phone or password");
+        return sendError(res, 401, L.auth.invalid_credentials);
       }
       
       if (user.status === "blocked") {
-        return sendError(res, 403, "FORBIDDEN", "User account is blocked");
+        return sendError(res, 403, L.auth.user_blocked);
       }
       
       if (user.deletedAt) {
-        return sendError(res, 401, "UNAUTHORIZED", "User account has been deleted");
+        return sendError(res, 401, L.auth.user_deleted);
       }
       
       const tokens = generateTokens(user.id);
@@ -78,12 +86,16 @@ export async function registerRoutes(
         );
       }
       
-      res.json(tokens);
+      res.json({
+        status: "success",
+        message: { key: L.auth.login_success, params: { userId: user.id } },
+        data: tokens
+      });
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return sendError(res, 400, "BAD_REQUEST", err.errors[0].message);
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
       }
-      return sendError(res, 500, "INTERNAL_ERROR", "Login failed");
+      return sendError(res, 500, L.common.internal_error);
     }
   });
 
@@ -91,17 +103,21 @@ export async function registerRoutes(
     try {
       const { refreshToken } = req.body;
       if (!refreshToken) {
-        return sendError(res, 400, "BAD_REQUEST", "Refresh token required");
+        return sendError(res, 400, L.common.bad_request, { field: "refreshToken" });
       }
       
       const tokens = refreshAccessToken(refreshToken);
       if (!tokens) {
-        return sendError(res, 401, "UNAUTHORIZED", "Invalid or expired refresh token");
+        return sendError(res, 401, L.auth.token_expired);
       }
       
-      res.json(tokens);
+      res.json({
+        status: "success",
+        message: { key: L.auth.refresh_success },
+        data: tokens
+      });
     } catch {
-      return sendError(res, 500, "INTERNAL_ERROR", "Token refresh failed");
+      return sendError(res, 500, L.common.internal_error);
     }
   });
 
@@ -135,7 +151,7 @@ export async function registerRoutes(
   app.get("/api/users/:id", authMiddleware, requirePermissions("users.read"), async (req, res) => {
     const user = await storage.getUser(req.params.id);
     if (!user) {
-      return sendError(res, 404, "NOT_FOUND", "User not found");
+      return sendError(res, 404, L.user.not_found, { userId: req.params.id });
     }
     
     const { passwordHash, ...userData } = user;
@@ -146,12 +162,12 @@ export async function registerRoutes(
   app.patch("/api/users/:id", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
     const existingUser = await storage.getUser(req.params.id);
     if (!existingUser) {
-      return sendError(res, 404, "NOT_FOUND", "User not found");
+      return sendError(res, 404, L.user.not_found, { userId: req.params.id });
     }
     
     const user = await storage.updateUser(req.params.id, req.body);
     if (!user) {
-      return sendError(res, 404, "NOT_FOUND", "User not found");
+      return sendError(res, 404, L.user.not_found, { userId: req.params.id });
     }
     
     if (req.body.status === "blocked" && existingUser.status !== "blocked") {
@@ -196,12 +212,12 @@ export async function registerRoutes(
   app.post("/api/users/:id/roles", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
     const { roleIds } = req.body;
     if (!Array.isArray(roleIds)) {
-      return sendError(res, 400, "BAD_REQUEST", "roleIds must be an array");
+      return sendError(res, 400, L.role.invalid_role_ids);
     }
     
     const user = await storage.getUser(req.params.id);
     if (!user) {
-      return sendError(res, 404, "NOT_FOUND", "User not found");
+      return sendError(res, 404, L.user.not_found, { userId: req.params.id });
     }
     
     const oldRoles = await storage.getUserRoles(req.params.id);
@@ -219,17 +235,20 @@ export async function registerRoutes(
       metadata: {}
     });
     
-    res.json({ success: true });
+    res.json({ 
+      status: "success", 
+      message: { key: L.user.roles_assigned, params: { userId: req.params.id } } 
+    });
   });
 
   app.delete("/api/users/:id", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
     const user = await storage.getUser(req.params.id);
     if (!user) {
-      return sendError(res, 404, "NOT_FOUND", "User not found");
+      return sendError(res, 404, L.user.not_found, { userId: req.params.id });
     }
     
     if (user.deletedAt) {
-      return sendError(res, 409, "CONFLICT", "User already deleted");
+      return sendError(res, 409, L.user.already_deleted, { userId: req.params.id });
     }
     
     const deleted = await storage.softDeleteUser(req.params.id);
@@ -259,22 +278,26 @@ export async function registerRoutes(
     try {
       const data = insertAddressSchema.parse(req.body);
       const address = await storage.createAddress(req.user!.id, data);
-      res.status(201).json(address);
+      res.status(201).json({
+        status: "success",
+        message: { key: L.address.created, params: { addressId: address.id } },
+        data: address
+      });
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return sendError(res, 400, "BAD_REQUEST", err.errors[0].message);
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
       }
-      return sendError(res, 500, "INTERNAL_ERROR", "Failed to create address");
+      return sendError(res, 500, L.common.internal_error);
     }
   });
 
   app.patch("/api/addresses/:id", authMiddleware, async (req, res) => {
     const address = await storage.getAddress(req.params.id);
     if (!address) {
-      return sendError(res, 404, "NOT_FOUND", "Address not found");
+      return sendError(res, 404, L.address.not_found, { addressId: req.params.id });
     }
     if (address.userId !== req.user!.id && !req.userPermissions?.includes("addresses.manage")) {
-      return sendError(res, 403, "FORBIDDEN", "You do not have permission");
+      return sendError(res, 403, L.address.forbidden);
     }
     
     const updated = await storage.updateAddress(req.params.id, req.body);
@@ -284,10 +307,10 @@ export async function registerRoutes(
   app.delete("/api/addresses/:id", authMiddleware, async (req, res) => {
     const address = await storage.getAddress(req.params.id);
     if (!address) {
-      return sendError(res, 404, "NOT_FOUND", "Address not found");
+      return sendError(res, 404, L.address.not_found, { addressId: req.params.id });
     }
     if (address.userId !== req.user!.id && !req.userPermissions?.includes("addresses.manage")) {
-      return sendError(res, 403, "FORBIDDEN", "You do not have permission");
+      return sendError(res, 403, L.address.forbidden);
     }
     
     await storage.deleteAddress(req.params.id);
@@ -300,19 +323,23 @@ export async function registerRoutes(
       
       const address = await storage.getAddress(data.addressId);
       if (!address) {
-        return sendError(res, 400, "BAD_REQUEST", "Invalid address");
+        return sendError(res, 400, L.address.not_found, { addressId: data.addressId });
       }
       if (address.userId !== req.user!.id) {
-        return sendError(res, 403, "FORBIDDEN", "Address does not belong to you");
+        return sendError(res, 403, L.address.forbidden);
       }
       
       const order = await storage.createOrder(req.user!.id, data);
-      res.status(201).json(order);
+      res.status(201).json({
+        status: "success",
+        message: { key: L.order.created, params: { orderId: order.id } },
+        data: order
+      });
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return sendError(res, 400, "BAD_REQUEST", err.errors[0].message);
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
       }
-      return sendError(res, 500, "INTERNAL_ERROR", "Failed to create order");
+      return sendError(res, 500, L.common.internal_error);
     }
   });
 
@@ -344,7 +371,7 @@ export async function registerRoutes(
   app.get("/api/orders/:id", authMiddleware, async (req, res) => {
     const order = await storage.getOrder(req.params.id);
     if (!order) {
-      return sendError(res, 404, "NOT_FOUND", "Order not found");
+      return sendError(res, 404, L.order.not_found, { orderId: req.params.id });
     }
     
     const canView = req.userPermissions?.includes("orders.read") ||
@@ -352,7 +379,7 @@ export async function registerRoutes(
       order.courierId === req.user!.id;
     
     if (!canView) {
-      return sendError(res, 403, "FORBIDDEN", "You do not have permission");
+      return sendError(res, 403, L.common.forbidden);
     }
     
     const address = await storage.getAddress(order.addressId);
@@ -365,7 +392,7 @@ export async function registerRoutes(
     try {
       const order = await storage.getOrder(req.params.id);
       if (!order) {
-        return sendError(res, 404, "NOT_FOUND", "Order not found");
+        return sendError(res, 404, L.order.not_found, { orderId: req.params.id });
       }
       
       const hasPermission = req.userPermissions?.includes("orders.update_status");
@@ -373,64 +400,68 @@ export async function registerRoutes(
       const isCourier = order.courierId === req.user!.id;
       
       if (!hasPermission && !isOwner && !isCourier) {
-        return sendError(res, 403, "FORBIDDEN", "You do not have permission");
+        return sendError(res, 403, L.common.forbidden);
       }
       
       const data = updateOrderSchema.parse(req.body);
       
       if (data.status && !isValidStatusTransition(order.status, data.status)) {
-        return sendError(res, 409, "CONFLICT", `Cannot transition from '${order.status}' to '${data.status}'`);
+        return sendError(res, 409, L.order.invalid_status_transition, { from: order.status, to: data.status });
       }
       
       const updated = await storage.updateOrder(req.params.id, data, req.user!.id);
       res.json(updated);
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return sendError(res, 400, "BAD_REQUEST", err.errors[0].message);
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
       }
-      return sendError(res, 500, "INTERNAL_ERROR", "Failed to update order");
+      return sendError(res, 500, L.common.internal_error);
     }
   });
 
   app.post("/api/orders/:id/assign", authMiddleware, requirePermissions("orders.assign"), async (req, res) => {
     const { courierId } = req.body;
     if (!courierId) {
-      return sendError(res, 400, "BAD_REQUEST", "courierId required");
+      return sendError(res, 400, L.common.bad_request, { field: "courierId" });
     }
     
     const order = await storage.getOrder(req.params.id);
     if (!order) {
-      return sendError(res, 404, "NOT_FOUND", "Order not found");
+      return sendError(res, 404, L.order.not_found, { orderId: req.params.id });
     }
     
     if (order.courierId) {
-      return sendError(res, 409, "CONFLICT", "Order already has a courier assigned");
+      return sendError(res, 409, L.order.already_assigned, { orderId: req.params.id });
     }
     
     const courier = await storage.getUser(courierId);
     if (!courier || courier.type !== "courier") {
-      return sendError(res, 400, "BAD_REQUEST", "Invalid courier");
+      return sendError(res, 400, L.courier.not_found, { courierId });
     }
     
     const updated = await storage.assignCourier(req.params.id, courierId, req.user!.id);
-    res.json(updated);
+    res.json({
+      status: "success",
+      message: { key: L.order.assigned, params: { orderId: req.params.id, courierId } },
+      data: updated
+    });
   });
 
   app.post("/api/orders/:id/cancel", authMiddleware, async (req, res) => {
     const order = await storage.getOrder(req.params.id);
     if (!order) {
-      return sendError(res, 404, "NOT_FOUND", "Order not found");
+      return sendError(res, 404, L.order.not_found, { orderId: req.params.id });
     }
     
     const canCancel = req.userPermissions?.includes("orders.update_status") ||
       order.clientId === req.user!.id;
     
     if (!canCancel) {
-      return sendError(res, 403, "FORBIDDEN", "You do not have permission");
+      return sendError(res, 403, L.common.forbidden);
     }
     
     if (order.status === "completed" || order.status === "cancelled") {
-      return sendError(res, 409, "CONFLICT", "Cannot cancel order in current status");
+      return sendError(res, 409, L.order.cannot_cancel, { orderId: req.params.id, status: order.status });
     }
     
     const updated = await storage.updateOrder(req.params.id, { status: "cancelled" }, req.user!.id);
@@ -438,16 +469,20 @@ export async function registerRoutes(
     await storage.createOrderEvent(req.user!.id, {
       orderId: order.id,
       eventType: "cancelled",
-      metadata: { reason: req.body.reason || "No reason provided" }
+      metadata: { reason: req.body.reason }
     });
     
-    res.json(updated);
+    res.json({
+      status: "success",
+      message: { key: L.order.cancelled, params: { orderId: req.params.id } },
+      data: updated
+    });
   });
 
   app.get("/api/courier/profile", authMiddleware, requireUserType("courier"), async (req, res) => {
     const profile = await storage.getCourierProfile(req.user!.id);
     if (!profile) {
-      return sendError(res, 404, "NOT_FOUND", "Courier profile not found");
+      return sendError(res, 404, L.courier.profile_not_found);
     }
     res.json(profile);
   });
@@ -457,14 +492,18 @@ export async function registerRoutes(
       const data = updateCourierProfileSchema.parse(req.body);
       const profile = await storage.updateCourierProfile(req.user!.id, data);
       if (!profile) {
-        return sendError(res, 404, "NOT_FOUND", "Courier profile not found");
+        return sendError(res, 404, L.courier.profile_not_found);
       }
-      res.json(profile);
+      res.json({
+        status: "success",
+        message: { key: L.courier.profile_updated },
+        data: profile
+      });
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return sendError(res, 400, "BAD_REQUEST", err.errors[0].message);
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
       }
-      return sendError(res, 500, "INTERNAL_ERROR", "Failed to update profile");
+      return sendError(res, 500, L.common.internal_error);
     }
   });
 
@@ -485,15 +524,15 @@ export async function registerRoutes(
   app.post("/api/courier/orders/:id/accept", authMiddleware, requireUserType("courier"), async (req, res) => {
     const order = await storage.getOrder(req.params.id);
     if (!order) {
-      return sendError(res, 404, "NOT_FOUND", "Order not found");
+      return sendError(res, 404, L.order.not_found, { orderId: req.params.id });
     }
     
     if (order.courierId !== req.user!.id) {
-      return sendError(res, 403, "FORBIDDEN", "This order is not assigned to you");
+      return sendError(res, 403, L.order.not_assigned_to_you, { orderId: req.params.id });
     }
     
     if (order.status !== "assigned") {
-      return sendError(res, 409, "CONFLICT", "Order is not in assigned status");
+      return sendError(res, 409, L.order.not_in_assigned_status, { orderId: req.params.id, status: order.status });
     }
     
     const updated = await storage.updateOrder(req.params.id, { status: "in_progress" }, req.user!.id);
@@ -504,21 +543,25 @@ export async function registerRoutes(
       metadata: {}
     });
     
-    res.json(updated);
+    res.json({
+      status: "success",
+      message: { key: L.order.started, params: { orderId: req.params.id } },
+      data: updated
+    });
   });
 
   app.post("/api/courier/orders/:id/complete", authMiddleware, requireUserType("courier"), async (req, res) => {
     const order = await storage.getOrder(req.params.id);
     if (!order) {
-      return sendError(res, 404, "NOT_FOUND", "Order not found");
+      return sendError(res, 404, L.order.not_found, { orderId: req.params.id });
     }
     
     if (order.courierId !== req.user!.id) {
-      return sendError(res, 403, "FORBIDDEN", "This order is not assigned to you");
+      return sendError(res, 403, L.order.not_assigned_to_you, { orderId: req.params.id });
     }
     
     if (order.status !== "in_progress") {
-      return sendError(res, 409, "CONFLICT", "Order is not in progress");
+      return sendError(res, 409, L.order.not_in_progress, { orderId: req.params.id, status: order.status });
     }
     
     const updated = await storage.updateOrder(req.params.id, { status: "completed" }, req.user!.id);
@@ -529,7 +572,11 @@ export async function registerRoutes(
       metadata: {}
     });
     
-    res.json(updated);
+    res.json({
+      status: "success",
+      message: { key: L.order.completed, params: { orderId: req.params.id } },
+      data: updated
+    });
   });
 
   app.get("/api/roles", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
@@ -557,12 +604,16 @@ export async function registerRoutes(
       }
       
       const permissions = await storage.getRolePermissions(role.id);
-      res.status(201).json({ ...role, permissions: permissions.map(p => p.name) });
+      res.status(201).json({
+        status: "success",
+        message: { key: L.role.created, params: { roleId: role.id } },
+        data: { ...role, permissions: permissions.map(p => p.name) }
+      });
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return sendError(res, 400, "BAD_REQUEST", err.errors[0].message);
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
       }
-      return sendError(res, 500, "INTERNAL_ERROR", "Failed to create role");
+      return sendError(res, 500, L.common.internal_error);
     }
   });
 
@@ -588,17 +639,17 @@ export async function registerRoutes(
   app.patch("/api/couriers/:id/verify", authMiddleware, requirePermissions("couriers.verify"), async (req, res) => {
     const { status } = req.body;
     if (!["verified", "rejected"].includes(status)) {
-      return sendError(res, 400, "BAD_REQUEST", "Invalid verification status");
+      return sendError(res, 400, L.courier.invalid_verification_status);
     }
     
     const courier = await storage.getUser(req.params.id);
     if (!courier || courier.type !== "courier") {
-      return sendError(res, 404, "NOT_FOUND", "Courier not found");
+      return sendError(res, 404, L.courier.not_found, { courierId: req.params.id });
     }
     
     const profile = await storage.getCourierProfile(req.params.id);
     if (!profile) {
-      return sendError(res, 404, "NOT_FOUND", "Courier profile not found");
+      return sendError(res, 404, L.courier.profile_not_found, { courierId: req.params.id });
     }
     
     const oldStatus = profile.verificationStatus;
@@ -615,7 +666,11 @@ export async function registerRoutes(
       metadata: {}
     });
     
-    res.json(updated);
+    res.json({
+      status: "success",
+      message: { key: L.courier.verified, params: { courierId: req.params.id, status } },
+      data: updated
+    });
   });
 
   app.get("/api/audit-logs", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
@@ -655,7 +710,7 @@ export async function registerRoutes(
     const session = sessions.find(s => s.id === req.params.id);
     
     if (!session) {
-      return sendError(res, 404, "NOT_FOUND", "Session not found");
+      return sendError(res, 404, L.auth.session_not_found, { sessionId: req.params.id });
     }
     
     await storage.deleteSession(req.params.id);
@@ -665,7 +720,10 @@ export async function registerRoutes(
   app.post("/api/auth/logout-all", authMiddleware, async (req, res) => {
     await storage.deleteUserSessions(req.user!.id);
     revokeUserTokens(req.user!.id);
-    res.json({ success: true });
+    res.json({ 
+      status: "success", 
+      message: { key: L.auth.logout_all_success } 
+    });
   });
 
   return httpServer;

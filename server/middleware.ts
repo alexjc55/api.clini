@@ -2,6 +2,8 @@ import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, extractToken } from "./auth";
 import { storage } from "./storage";
 import type { User } from "@shared/schema";
+import { L } from "./localization-keys";
+import { i18nMiddleware, sendLocalizedError } from "./i18n";
 
 declare global {
   namespace Express {
@@ -12,31 +14,31 @@ declare global {
   }
 }
 
-export function sendError(res: Response, status: number, code: string, message: string) {
-  res.status(status).json({
-    error: { code, message }
-  });
+export { i18nMiddleware };
+
+export function sendError(res: Response, status: number, key: string, params?: Record<string, unknown>) {
+  sendLocalizedError(res, status, key, params);
 }
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const token = extractToken(req.headers.authorization);
   
   if (!token) {
-    return sendError(res, 401, "UNAUTHORIZED", "Authentication required");
+    return sendError(res, 401, L.auth.missing_token);
   }
   
   const userId = verifyAccessToken(token);
   if (!userId) {
-    return sendError(res, 401, "UNAUTHORIZED", "Invalid or expired token");
+    return sendError(res, 401, L.auth.invalid_token);
   }
   
   const user = await storage.getUser(userId);
   if (!user) {
-    return sendError(res, 401, "UNAUTHORIZED", "User not found");
+    return sendError(res, 401, L.user.not_found);
   }
   
   if (user.status === "blocked") {
-    return sendError(res, 403, "FORBIDDEN", "User account is blocked");
+    return sendError(res, 403, L.auth.user_blocked);
   }
   
   req.user = user;
@@ -48,7 +50,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 export function requirePermissions(...requiredPermissions: string[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user || !req.userPermissions) {
-      return sendError(res, 401, "UNAUTHORIZED", "Authentication required");
+      return sendError(res, 401, L.auth.missing_token);
     }
     
     const hasAllPermissions = requiredPermissions.every(
@@ -56,7 +58,9 @@ export function requirePermissions(...requiredPermissions: string[]) {
     );
     
     if (!hasAllPermissions) {
-      return sendError(res, 403, "FORBIDDEN", "You do not have permission");
+      return sendError(res, 403, L.common.missing_permission, { 
+        required: requiredPermissions 
+      });
     }
     
     next();
@@ -66,11 +70,14 @@ export function requirePermissions(...requiredPermissions: string[]) {
 export function requireUserType(...types: string[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return sendError(res, 401, "UNAUTHORIZED", "Authentication required");
+      return sendError(res, 401, L.auth.missing_token);
     }
     
     if (!types.includes(req.user.type)) {
-      return sendError(res, 403, "FORBIDDEN", "This action is not available for your user type");
+      return sendError(res, 403, L.common.invalid_user_type, { 
+        required: types,
+        current: req.user.type 
+      });
     }
     
     next();
