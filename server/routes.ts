@@ -2,6 +2,9 @@ import type { Express, Router, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { Router as ExpressRouter } from "express";
 import rateLimit from "express-rate-limit";
+import { readFileSync } from "fs";
+import { join } from "path";
+import yaml from "js-yaml";
 import { storage } from "./storage";
 import { generateTokens, refreshAccessToken, revokeUserTokens } from "./auth";
 import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware } from "./middleware";
@@ -780,6 +783,25 @@ export async function registerRoutes(
       status: "success", 
       message: { key: L.session.all_sessions_deleted } 
     });
+  });
+
+  v1Router.get("/openapi.json", (_req, res) => {
+    try {
+      const yamlContent = readFileSync(join(process.cwd(), "docs/openapi.yaml"), "utf-8");
+      const openApiSpec = yaml.load(yamlContent);
+      res.json(openApiSpec);
+    } catch (err) {
+      res.status(500).json({ error: "OpenAPI spec not found" });
+    }
+  });
+
+  v1Router.get("/openapi.yaml", (_req, res) => {
+    try {
+      const yamlContent = readFileSync(join(process.cwd(), "docs/openapi.yaml"), "utf-8");
+      res.type("text/yaml").send(yamlContent);
+    } catch (err) {
+      res.status(500).json({ error: "OpenAPI spec not found" });
+    }
   });
 
   app.use("/api/v1", v1Router);

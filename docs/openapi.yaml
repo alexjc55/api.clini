@@ -1,0 +1,1015 @@
+openapi: 3.0.3
+info:
+  title: Waste Collection API
+  description: |
+    REST API для сервиса выноса мусора / бытовых услуг.
+    
+    ## Особенности
+    - **i18n**: Поддержка языков `he`, `ru`, `ar`, `en` через заголовок `Accept-Language`
+    - **RBAC**: Role & Permission Based Access Control
+    - **Soft Delete**: User, Order, CourierProfile, Address с `?includeDeleted=true`
+    - **Audit Logging**: Все staff-действия логируются
+    - **JWT Auth**: Access + Refresh токены
+    
+    ## Аутентификация
+    Все защищённые endpoints требуют заголовок:
+    ```
+    Authorization: Bearer <access_token>
+    ```
+  version: 1.0.0
+  contact:
+    name: API Support
+servers:
+  - url: /api/v1
+    description: API Version 1
+  - url: /api
+    description: Legacy (deprecated)
+
+tags:
+  - name: auth
+    description: Аутентификация и сессии
+  - name: users
+    description: Управление пользователями (ERP)
+  - name: addresses
+    description: Адреса клиентов
+  - name: orders
+    description: Управление заказами
+  - name: courier
+    description: Курьерский интерфейс
+  - name: roles
+    description: Роли и права (ERP)
+  - name: audit
+    description: Аудит лог (ERP)
+
+paths:
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Регистрация пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Успешная регистрация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          description: Пользователь уже существует
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Авторизация
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешная авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Неверные учётные данные
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Обновление токена
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Новый access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Текущий пользователь
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Данные пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /auth/sessions:
+    get:
+      tags: [auth]
+      summary: Мои активные сессии
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список сессий
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+
+  /auth/sessions/{id}:
+    delete:
+      tags: [auth]
+      summary: Выход с устройства
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Сессия удалена
+
+  /auth/logout-all:
+    post:
+      tags: [auth]
+      summary: Выход со всех устройств
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Все сессии удалены
+
+  /users:
+    get:
+      tags: [users]
+      summary: Список пользователей (ERP)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [client, courier, staff]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, blocked]
+        - name: includeDeleted
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Список пользователей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /users/{id}:
+    get:
+      tags: [users]
+      summary: Информация о пользователе
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Данные пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    patch:
+      tags: [users]
+      summary: Обновление пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUser'
+      responses:
+        '200':
+          description: Пользователь обновлён
+    delete:
+      tags: [users]
+      summary: Soft delete пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Пользователь удалён
+
+  /users/{id}/roles:
+    post:
+      tags: [users]
+      summary: Назначение ролей пользователю
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roleIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Роли назначены
+
+  /addresses:
+    get:
+      tags: [addresses]
+      summary: Мои адреса
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список адресов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Address'
+    post:
+      tags: [addresses]
+      summary: Добавить адрес
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAddress'
+      responses:
+        '201':
+          description: Адрес создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+
+  /addresses/{id}:
+    patch:
+      tags: [addresses]
+      summary: Обновить адрес
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAddress'
+      responses:
+        '200':
+          description: Адрес обновлён
+    delete:
+      tags: [addresses]
+      summary: Удалить адрес (soft delete)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Адрес удалён
+
+  /orders:
+    get:
+      tags: [orders]
+      summary: Список заказов
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [created, scheduled, assigned, in_progress, completed, cancelled]
+        - name: includeDeleted
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Список заказов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+    post:
+      tags: [orders]
+      summary: Создать заказ
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrder'
+      responses:
+        '201':
+          description: Заказ создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/{id}:
+    get:
+      tags: [orders]
+      summary: Детали заказа
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: includeDeleted
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Детали заказа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+    patch:
+      tags: [orders]
+      summary: Обновить заказ
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrder'
+      responses:
+        '200':
+          description: Заказ обновлён
+    delete:
+      tags: [orders]
+      summary: Soft delete заказа
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Заказ удалён
+
+  /orders/{id}/assign:
+    post:
+      tags: [orders]
+      summary: Назначить курьера
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courierId]
+              properties:
+                courierId:
+                  type: string
+      responses:
+        '200':
+          description: Курьер назначен
+
+  /orders/{id}/cancel:
+    post:
+      tags: [orders]
+      summary: Отменить заказ
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Заказ отменён
+
+  /courier/profile:
+    get:
+      tags: [courier]
+      summary: Профиль курьера
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Профиль курьера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourierProfile'
+    patch:
+      tags: [courier]
+      summary: Обновить статус курьера
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCourierProfile'
+      responses:
+        '200':
+          description: Профиль обновлён
+
+  /courier/orders:
+    get:
+      tags: [courier]
+      summary: Заказы курьера
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список заказов курьера
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+
+  /courier/orders/{id}/accept:
+    post:
+      tags: [courier]
+      summary: Принять заказ
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Заказ принят
+
+  /courier/orders/{id}/complete:
+    post:
+      tags: [courier]
+      summary: Завершить заказ
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Заказ завершён
+
+  /roles:
+    get:
+      tags: [roles]
+      summary: Список ролей
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список ролей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+    post:
+      tags: [roles]
+      summary: Создать роль
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRole'
+      responses:
+        '201':
+          description: Роль создана
+
+  /permissions:
+    get:
+      tags: [roles]
+      summary: Список прав
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список прав
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Permission'
+
+  /couriers:
+    get:
+      tags: [roles]
+      summary: Список курьеров (ERP)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: includeDeleted
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Список курьеров
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CourierWithProfile'
+
+  /couriers/{id}/verify:
+    patch:
+      tags: [roles]
+      summary: Верификация курьера
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Курьер верифицирован
+
+  /audit-logs:
+    get:
+      tags: [audit]
+      summary: Просмотр аудит логов
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: entity
+          in: query
+          schema:
+            type: string
+        - name: entityId
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список записей аудита
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [type, phone, password]
+      properties:
+        type:
+          type: string
+          enum: [client, courier, staff]
+        phone:
+          type: string
+          example: "+972501234567"
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+
+    LoginRequest:
+      type: object
+      required: [phone, password]
+      properties:
+        phone:
+          type: string
+        password:
+          type: string
+        deviceId:
+          type: string
+        platform:
+          type: string
+          enum: [ios, android, web]
+
+    AuthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          $ref: '#/components/schemas/I18nMessage'
+        data:
+          $ref: '#/components/schemas/TokenResponse'
+
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+
+    I18nMessage:
+      type: object
+      properties:
+        key:
+          type: string
+          example: "auth.login_success"
+        params:
+          type: object
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [client, courier, staff]
+        phone:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+          enum: [active, blocked]
+        createdAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    UpdateUser:
+      type: object
+      properties:
+        email:
+          type: string
+        status:
+          type: string
+          enum: [active, blocked]
+
+    Address:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        city:
+          type: string
+        street:
+          type: string
+        house:
+          type: string
+        apartment:
+          type: string
+        floor:
+          type: integer
+        hasElevator:
+          type: boolean
+        comment:
+          type: string
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateAddress:
+      type: object
+      required: [city, street, house]
+      properties:
+        city:
+          type: string
+        street:
+          type: string
+        house:
+          type: string
+        apartment:
+          type: string
+        floor:
+          type: integer
+        hasElevator:
+          type: boolean
+        comment:
+          type: string
+
+    UpdateAddress:
+      type: object
+      properties:
+        city:
+          type: string
+        street:
+          type: string
+        house:
+          type: string
+        apartment:
+          type: string
+        floor:
+          type: integer
+        hasElevator:
+          type: boolean
+        comment:
+          type: string
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+        courierId:
+          type: string
+          nullable: true
+        addressId:
+          type: string
+        scheduledAt:
+          type: string
+          format: date-time
+        timeWindow:
+          type: string
+          example: "09:00-12:00"
+        status:
+          type: string
+          enum: [created, scheduled, assigned, in_progress, completed, cancelled]
+        price:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateOrder:
+      type: object
+      required: [addressId, scheduledAt, timeWindow]
+      properties:
+        addressId:
+          type: string
+        scheduledAt:
+          type: string
+          format: date-time
+        timeWindow:
+          type: string
+        price:
+          type: number
+
+    UpdateOrder:
+      type: object
+      properties:
+        scheduledAt:
+          type: string
+          format: date-time
+        timeWindow:
+          type: string
+        status:
+          type: string
+          enum: [created, scheduled, assigned, in_progress, completed, cancelled]
+        price:
+          type: number
+
+    CourierProfile:
+      type: object
+      properties:
+        courierId:
+          type: string
+        availabilityStatus:
+          type: string
+          enum: [available, busy, offline]
+        rating:
+          type: number
+        completedOrdersCount:
+          type: integer
+        verificationStatus:
+          type: string
+          enum: [pending, verified, rejected]
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    UpdateCourierProfile:
+      type: object
+      properties:
+        availabilityStatus:
+          type: string
+          enum: [available, busy, offline]
+
+    CourierWithProfile:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        profile:
+          $ref: '#/components/schemas/CourierProfile'
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+
+    CreateRole:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    Permission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        deviceId:
+          type: string
+        platform:
+          type: string
+        userAgent:
+          type: string
+        lastSeenAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        userRole:
+          type: string
+        action:
+          type: string
+        messageKey:
+          type: string
+        entity:
+          type: string
+        entityId:
+          type: string
+        changes:
+          type: object
+        metadata:
+          type: object
+        createdAt:
+          type: string
+          format: date-time

@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight, Send, Copy, Check, Key, Server, Shield, Users, Package, MapPin, Truck, Globe } from "lucide-react";
+import { ChevronDown, ChevronRight, Send, Copy, Check, Key, Server, Shield, Users, Package, MapPin, Truck, Globe, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Lang = "en" | "ru";
@@ -82,7 +82,12 @@ const t = {
     softDeleteTitle: "Soft Delete",
     softDeleteDesc: "Deleted entities have deletedAt field. Use ?includeDeleted=true to view deleted (ERP only)",
     auditLogTitle: "Audit Logging",
-    auditLogDesc: "Staff actions are logged with: who, what, when, and changes diff"
+    auditLogDesc: "Staff actions are logged with: who, what, when, and changes diff",
+    openApiSpec: "OpenAPI Spec",
+    downloadJson: "JSON",
+    downloadYaml: "YAML",
+    corsTitle: "CORS Configuration",
+    corsDesc: "Set ALLOWED_ORIGINS environment variable for cross-origin requests"
   },
   ru: {
     title: "Waste Collection API",
@@ -135,7 +140,12 @@ const t = {
     softDeleteTitle: "Мягкое удаление",
     softDeleteDesc: "Удалённые сущности имеют поле deletedAt. Используйте ?includeDeleted=true для просмотра (только ERP)",
     auditLogTitle: "Аудит логирование",
-    auditLogDesc: "Действия персонала логируются: кто, что, когда, и diff изменений"
+    auditLogDesc: "Действия персонала логируются: кто, что, когда, и diff изменений",
+    openApiSpec: "OpenAPI спецификация",
+    downloadJson: "JSON",
+    downloadYaml: "YAML",
+    corsTitle: "Настройка CORS",
+    corsDesc: "Установите переменную окружения ALLOWED_ORIGINS для кросс-доменных запросов"
   }
 };
 
@@ -722,6 +732,19 @@ export default function ApiDocs() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <a href="/api/v1/openapi.json" download="openapi.json" className="inline-flex" data-testid="link-download-json">
+              <Button size="sm" variant="outline" data-testid="button-download-json">
+                <Download className="h-4 w-4 mr-1" />
+                {tr.downloadJson}
+              </Button>
+            </a>
+            <a href="/api/v1/openapi.yaml" download="openapi.yaml" className="inline-flex" data-testid="link-download-yaml">
+              <Button size="sm" variant="outline" data-testid="button-download-yaml">
+                <Download className="h-4 w-4 mr-1" />
+                {tr.downloadYaml}
+              </Button>
+            </a>
+            <div className="w-px h-6 bg-border" />
             <Button
               size="sm"
               variant={lang === "en" ? "default" : "outline"}

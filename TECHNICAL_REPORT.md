@@ -437,6 +437,7 @@ common.rate_limit_exceeded, common.missing_permission, common.invalid_user_type
 │       └── pages/
 │           └── api-docs.tsx    # Интерактивная документация (EN/RU)
 ├── docs/
+│   ├── openapi.yaml            # OpenAPI 3.0 спецификация
 │   └── POSTGRESQL_MIGRATION.md # Руководство по миграции на PostgreSQL
 ├── server/
 │   ├── auth.ts                 # JWT аутентификация
@@ -483,14 +484,70 @@ npm run dev
 | API Versioning (`/api/v1/*`) | ✅ Реализовано |
 | JWT аутентификация (access + refresh) | ✅ Реализовано |
 | RBAC (роли + права) | ✅ Реализовано |
-| Soft Delete (User, Order, CourierProfile) | ✅ Реализовано |
+| Soft Delete (User, Order, CourierProfile, Address) | ✅ Реализовано |
 | Audit Logging с i18n messageKey | ✅ Реализовано |
 | Device/Session Tracking | ✅ Реализовано |
 | Rate Limiting | ✅ Реализовано |
 | State Machine заказов | ✅ Реализовано |
 | i18n (ключи + params) | ✅ Реализовано |
 | Веб-документация (EN/RU) | ✅ Реализовано |
+| CORS (настраиваемый) | ✅ Реализовано |
+| OpenAPI 3.0 спецификация | ✅ Реализовано |
 | PostgreSQL интеграция | ⏳ Готово к миграции |
+
+---
+
+## 15. CORS и внешняя интеграция
+
+### 15.1 CORS настройка
+
+Переменная окружения `ALLOWED_ORIGINS`:
+```bash
+ALLOWED_ORIGINS=https://your-frontend.replit.app,https://your-domain.com
+```
+
+Если не указана — разрешены все домены (`*`)
+
+**Разрешённые заголовки:**
+- `Authorization` — JWT токен
+- `Content-Type` — тип контента
+- `Accept-Language` — язык (he, ru, ar, en)
+- `X-Device-Id` — идентификатор устройства
+
+### 15.2 OpenAPI спецификация
+
+| Endpoint | Формат |
+|----------|--------|
+| `GET /api/v1/openapi.json` | JSON |
+| `GET /api/v1/openapi.yaml` | YAML |
+
+**Использование:**
+- Автогенерация TypeScript типов
+- Импорт в Postman/Insomnia
+- Интеграция с Swagger UI
+- Валидация запросов/ответов
+
+### 15.3 Интеграция Replit фронтенда
+
+Для подключения Replit фронтенда к внешнему API:
+
+1. **Переменная окружения в Replit:**
+```bash
+VITE_API_BASE_URL=https://api.clini.co.il
+```
+
+2. **Настройка fetcher:**
+```typescript
+const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+fetch(\`\${apiBase}/api/v1/orders\`, {
+  headers: { Authorization: \`Bearer \${token}\` }
+});
+```
+
+3. **CORS на сервере:**
+```bash
+ALLOWED_ORIGINS=https://your-app.replit.app
+```
 
 ---
 

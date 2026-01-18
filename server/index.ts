@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -11,6 +12,25 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
+  : ["*"];
+
+const isWildcard = allowedOrigins.includes("*");
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (isWildcard) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error("CORS not allowed"));
+  },
+  credentials: !isWildcard,
+  allowedHeaders: ["Authorization", "Content-Type", "Accept-Language", "X-Device-Id"],
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  maxAge: 86400
+}));
 
 app.use(
   express.json({

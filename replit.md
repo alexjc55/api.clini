@@ -85,9 +85,26 @@ Accept-Language: he | ru | ar | en
 - Revoke refresh tokens при блокировке пользователя
 - Валидация переходов статусов (state machine)
 - RBAC с гранулярными permissions
-- Soft delete для User, Order, CourierProfile (`deletedAt` + `?includeDeleted=true`)
+- Soft delete для User, Order, CourierProfile, Address (`deletedAt` + `?includeDeleted=true`)
 - Audit log для staff-действий (кто, что, когда, diff)
 - Device/session tracking (deviceId, platform, lastSeenAt, userAgent)
+- **CORS** — настраиваемый через `ALLOWED_ORIGINS` env var
+
+## OpenAPI спецификация
+
+- `GET /api/v1/openapi.json` — JSON формат
+- `GET /api/v1/openapi.yaml` — YAML формат
+- Файл: `docs/openapi.yaml`
+- Доступно для скачивания в веб-документации
+
+## CORS настройка
+
+Переменная окружения `ALLOWED_ORIGINS`:
+```
+ALLOWED_ORIGINS=https://your-frontend.replit.app,https://your-domain.com
+```
+
+Если не указана — разрешены все домены (`*`)
 
 ## API Versioning
 
@@ -172,6 +189,7 @@ session.all_sessions_deleted
 │       └── pages/
 │           └── api-docs.tsx  # Интерактивная документация
 ├── docs/
+│   ├── openapi.yaml              # OpenAPI 3.0 спецификация
 │   └── POSTGRESQL_MIGRATION.md  # Руководство по миграции на PostgreSQL
 ├── server/
 │   ├── auth.ts            # JWT аутентификация
