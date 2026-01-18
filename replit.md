@@ -26,6 +26,9 @@ Backend API для сервиса выноса мусора / бытовых у�
 - **RBAC** — Role & Permission Based Access Control
 - **Extension-ready** — модульное расширение без изменения контрактов
 - **Event-based history** — аудит и аналитика
+- **API Versioning** — `/api/v1/*` с обратной совместимостью `/api/*`
+- **Soft Delete** — `deletedAt` поле для User, Order, CourierProfile
+- **Audit Logging** — все staff-действия логируются с diff изменений
 
 ## Технологии
 
@@ -82,9 +85,62 @@ Accept-Language: he | ru | ar | en
 - Revoke refresh tokens при блокировке пользователя
 - Валидация переходов статусов (state machine)
 - RBAC с гранулярными permissions
-- Soft delete пользователей (deletedAt + ?includeDeleted=true для админов)
+- Soft delete для User, Order, CourierProfile (`deletedAt` + `?includeDeleted=true`)
 - Audit log для staff-действий (кто, что, когда, diff)
-- Device/session tracking (deviceId, platform, lastSeenAt)
+- Device/session tracking (deviceId, platform, lastSeenAt, userAgent)
+
+## API Versioning
+
+Все endpoints доступны через:
+- `/api/v1/*` — версионированный API (рекомендуется)
+- `/api/*` — обратная совместимость (deprecated)
+
+## Soft Delete
+
+Сущности с поддержкой soft delete:
+- `User` — `deletedAt` поле
+- `Order` — `deletedAt` поле  
+- `CourierProfile` — `deletedAt` поле
+
+Фильтрация:
+- По умолчанию удалённые сущности скрыты
+- ERP может использовать `?includeDeleted=true` для просмотра
+
+## Audit Logging
+
+Логируемые действия (`AuditAction`):
+- `CREATE_USER`, `UPDATE_USER`, `DELETE_USER`, `BLOCK_USER`
+- `CREATE_ORDER`, `UPDATE_ORDER`, `CANCEL_ORDER`
+- `ASSIGN_COURIER`, `VERIFY_COURIER`
+- `CREATE_ROLE`, `ASSIGN_ROLE`
+
+Формат записи:
+```json
+{
+  "userId": "who",
+  "userRole": "admin",
+  "action": "VERIFY_COURIER",
+  "entity": "courier",
+  "entityId": "courier-uuid",
+  "changes": { "field": { "from": "old", "to": "new" } },
+  "metadata": {},
+  "createdAt": "ISO8601"
+}
+```
+
+## Device/Session Tracking
+
+При логине создаётся сессия:
+```json
+{
+  "deviceId": "device-123",
+  "platform": "ios | android | web",
+  "userAgent": "...",
+  "lastSeenAt": "ISO8601"
+}
+```
+
+Обновление `lastSeenAt` при refresh token.
 
 ## Структура проекта
 
@@ -104,52 +160,55 @@ Accept-Language: he | ru | ar | en
     └── schema.ts          # Типы и схемы данных
 ```
 
-## API Endpoints
+## API Endpoints (v1)
 
 ### Аутентификация
-- `POST /api/auth/register` — Регистрация
-- `POST /api/auth/login` — Авторизация
-- `POST /api/auth/refresh` — Обновление токена
-- `GET /api/auth/me` — Текущий пользователь
+- `POST /api/v1/auth/register` — Регистрация
+- `POST /api/v1/auth/login` — Авторизация (создаёт сессию)
+- `POST /api/v1/auth/refresh` — Обновление токена (обновляет lastSeenAt)
+- `GET /api/v1/auth/me` — Текущий пользователь
 
 ### Пользователи (ERP)
-- `GET /api/users` — Список пользователей (?includeDeleted=true для удалённых)
-- `GET /api/users/:id` — Информация о пользователе
-- `PATCH /api/users/:id` — Обновление пользователя
-- `DELETE /api/users/:id` — Soft delete пользователя
-- `POST /api/users/:id/roles` — Назначение ролей
+- `GET /api/v1/users` — Список (?type, ?status, ?includeDeleted=true)
+- `GET /api/v1/users/:id` — Информация о пользователе
+- `PATCH /api/v1/users/:id` — Обновление (audit log)
+- `DELETE /api/v1/users/:id` — Soft delete (audit log)
+- `POST /api/v1/users/:id/roles` — Назначение ролей (audit log)
 
 ### Audit & Sessions
-- `GET /api/audit-logs` — Просмотр audit log (staff)
-- `GET /api/auth/sessions` — Мои активные сессии
-- `DELETE /api/auth/sessions/:id` — Выход с устройства
-- `POST /api/auth/logout-all` — Выход со всех устройств
+- `GET /api/v1/audit-logs` — Просмотр (?userId, ?entity, ?entityId, ?action)
+- `GET /api/v1/auth/sessions` — Мои активные сессии
+- `DELETE /api/v1/auth/sessions/:id` — Выход с устройства
+- `POST /api/v1/auth/logout-all` — Выход со всех устройств
 
 ### Адреса
-- `GET /api/addresses` — Мои адреса
-- `POST /api/addresses` — Добавить адрес
-- `PATCH /api/addresses/:id` — Обновить адрес
-- `DELETE /api/addresses/:id` — Удалить адрес
+- `GET /api/v1/addresses` — Мои адреса
+- `POST /api/v1/addresses` — Добавить адрес
+- `PATCH /api/v1/addresses/:id` — Обновить адрес
+- `DELETE /api/v1/addresses/:id` — Удалить адрес
 
 ### Заказы
-- `POST /api/orders` — Создать заказ
-- `GET /api/orders` — Список заказов
-- `GET /api/orders/:id` — Детали заказа
-- `PATCH /api/orders/:id` — Обновить заказ
-- `POST /api/orders/:id/assign` — Назначить курьера
-- `POST /api/orders/:id/cancel` — Отменить заказ
+- `POST /api/v1/orders` — Создать заказ (audit log)
+- `GET /api/v1/orders` — Список (?status, ?includeDeleted=true)
+- `GET /api/v1/orders/:id` — Детали (?includeDeleted=true)
+- `PATCH /api/v1/orders/:id` — Обновить (audit log для staff)
+- `DELETE /api/v1/orders/:id` — Soft delete (audit log)
+- `POST /api/v1/orders/:id/assign` — Назначить курьера (audit log)
+- `POST /api/v1/orders/:id/cancel` — Отменить заказ (audit log)
 
 ### Курьеры
-- `GET /api/courier/profile` — Профиль курьера
-- `PATCH /api/courier/profile` — Обновить статус
-- `GET /api/courier/orders` — Заказы курьера
-- `POST /api/courier/orders/:id/accept` — Принять заказ
-- `POST /api/courier/orders/:id/complete` — Завершить заказ
+- `GET /api/v1/courier/profile` — Профиль курьера
+- `PATCH /api/v1/courier/profile` — Обновить статус
+- `GET /api/v1/courier/orders` — Заказы курьера
+- `POST /api/v1/courier/orders/:id/accept` — Принять заказ
+- `POST /api/v1/courier/orders/:id/complete` — Завершить заказ
 
 ### Роли и права (ERP)
-- `GET /api/roles` — Список ролей
-- `POST /api/roles` — Создать роль
-- `GET /api/permissions` — Список прав
+- `GET /api/v1/roles` — Список ролей
+- `POST /api/v1/roles` — Создать роль (audit log)
+- `GET /api/v1/permissions` — Список прав
+- `GET /api/v1/couriers` — Список курьеров (?includeDeleted=true)
+- `PATCH /api/v1/couriers/:id/verify` — Верификация курьера (audit log)
 
 ## Типы пользователей
 

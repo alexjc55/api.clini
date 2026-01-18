@@ -76,7 +76,13 @@ const t = {
       "Geolocation — last known location, proximity-based",
       "Finances — accruals, payouts, reports",
       "Courier verification — documents, statuses"
-    ]
+    ],
+    versioningTitle: "API Versioning",
+    versioningDesc: "All endpoints available via /api/v1/* with backward compatibility via /api/*",
+    softDeleteTitle: "Soft Delete",
+    softDeleteDesc: "Deleted entities have deletedAt field. Use ?includeDeleted=true to view deleted (ERP only)",
+    auditLogTitle: "Audit Logging",
+    auditLogDesc: "Staff actions are logged with: who, what, when, and changes diff"
   },
   ru: {
     title: "Waste Collection API",
@@ -123,7 +129,13 @@ const t = {
       "Геолокация — last known location, proximity-based",
       "Финансы — начисления, выплаты, отчёты",
       "Верификация курьеров — документы, статусы"
-    ]
+    ],
+    versioningTitle: "Версионирование API",
+    versioningDesc: "Все endpoints доступны через /api/v1/* с обратной совместимостью через /api/*",
+    softDeleteTitle: "Мягкое удаление",
+    softDeleteDesc: "Удалённые сущности имеют поле deletedAt. Используйте ?includeDeleted=true для просмотра (только ERP)",
+    auditLogTitle: "Аудит логирование",
+    auditLogDesc: "Действия персонала логируются: кто, что, когда, и diff изменений"
   }
 };
 
@@ -213,12 +225,12 @@ const apiSections: ApiSection[] = [
     endpoints: [
       {
         method: "GET",
-        path: "/api/users",
+        path: "/api/v1/users",
         summary: { en: "List users", ru: "Список пользователей" },
-        description: { en: "Get list of all users with filtering", ru: "Получение списка всех пользователей с фильтрацией" },
+        description: { en: "Get list of all users. Filters: ?type, ?status, ?includeDeleted=true", ru: "Получение списка всех пользователей. Фильтры: ?type, ?status, ?includeDeleted=true" },
         auth: true,
         permissions: ["users.read"],
-        responseExample: { users: [{ id: "uuid", type: "client", phone: "+79991234567", status: "active" }], total: 100, page: 1, limit: 20 }
+        responseExample: { users: [{ id: "uuid", type: "client", phone: "+79991234567", status: "active", deletedAt: null }], total: 100, page: 1, limit: 20 }
       },
       {
         method: "GET",
@@ -312,12 +324,12 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "GET",
-        path: "/api/orders",
+        path: "/api/v1/orders",
         summary: { en: "List orders", ru: "Список заказов" },
-        description: { en: "Get orders list (clients - own, ERP - all)", ru: "Получение списка заказов (для клиентов - свои, для ERP - все)" },
+        description: { en: "Get orders list. Filters: ?status, ?includeDeleted=true (ERP only)", ru: "Получение списка заказов. Фильтры: ?status, ?includeDeleted=true (только ERP)" },
         auth: true,
         permissions: ["orders.read"],
-        responseExample: { orders: [{ id: "order-uuid", status: "assigned", scheduledAt: "2024-01-20T10:00:00Z" }], total: 50 }
+        responseExample: { orders: [{ id: "order-uuid", status: "assigned", scheduledAt: "2024-01-20T10:00:00Z", deletedAt: null }], total: 50 }
       },
       {
         method: "GET",
@@ -347,11 +359,19 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "POST",
-        path: "/api/orders/:id/cancel",
+        path: "/api/v1/orders/:id/cancel",
         summary: { en: "Cancel order", ru: "Отмена заказа" },
         description: { en: "Cancel order by client or operator", ru: "Отмена заказа клиентом или оператором" },
         auth: true,
         requestBody: { reason: "Cancellation reason" }
+      },
+      {
+        method: "DELETE",
+        path: "/api/v1/orders/:id",
+        summary: { en: "Soft delete order", ru: "Soft delete заказа" },
+        description: { en: "Soft delete order (sets deletedAt). Use ?includeDeleted=true to view", ru: "Мягкое удаление заказа (устанавливает deletedAt). Используйте ?includeDeleted=true для просмотра" },
+        auth: true,
+        permissions: ["orders.update_status"]
       }
     ]
   },
@@ -434,12 +454,12 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "GET",
-        path: "/api/couriers",
+        path: "/api/v1/couriers",
         summary: { en: "List couriers", ru: "Список курьеров" },
-        description: { en: "Get list of all couriers with profiles (ERP)", ru: "Получение списка всех курьеров с профилями (ERP)" },
+        description: { en: "Get list of all couriers with profiles. Filter: ?includeDeleted=true", ru: "Получение списка всех курьеров с профилями. Фильтр: ?includeDeleted=true" },
         auth: true,
         permissions: ["users.read"],
-        responseExample: [{ id: "courier-uuid", phone: "+79991234567", profile: { availabilityStatus: "available", verificationStatus: "verified", rating: 4.8 } }]
+        responseExample: [{ id: "courier-uuid", phone: "+79991234567", profile: { availabilityStatus: "available", verificationStatus: "verified", rating: 4.8, deletedAt: null } }]
       },
       {
         method: "PATCH",
@@ -453,9 +473,9 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "GET",
-        path: "/api/audit-logs",
+        path: "/api/v1/audit-logs",
         summary: { en: "Audit log", ru: "Audit log" },
-        description: { en: "View staff action history. Filters: ?userId, ?entity, ?entityId", ru: "Просмотр истории действий персонала. Фильтры: ?userId, ?entity, ?entityId" },
+        description: { en: "View staff action history. Filters: ?userId, ?entity, ?entityId, ?action", ru: "Просмотр истории действий персонала. Фильтры: ?userId, ?entity, ?entityId, ?action" },
         auth: true,
         permissions: ["users.manage"],
         responseExample: { logs: [{ id: "log-uuid", userId: "staff-uuid", userRole: "admin", action: "VERIFY_COURIER", entity: "courier", entityId: "courier-uuid", changes: { verificationStatus: { from: "pending", to: "verified" } }, createdAt: "2026-01-15T10:30:00Z" }], total: 100, page: 1, limit: 50 }
