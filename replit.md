@@ -40,6 +40,9 @@ The API follows an API-first, stateless REST architecture, returning JSON respon
 - **Subscriptions:** Subscription management, plans, and rules with scheduling (`/subscriptions`, `/subscription-plans`).
 - **Partners & Marketplace:** Managing partners and offers by segment (`/partners`, `/partner-offers`).
 - **Order Financial Snapshots:** Financial tracking per order (`/orders/:id/finance`).
+- **Webhooks:** Real-time event notifications for partners/ERP with HMAC-SHA256 signing, 7 event types (`/webhooks`).
+- **System Feature Flags:** Global feature toggles with rollout percentage and user type targeting (`/flags`).
+- **Sandbox Mode:** Isolated testing environment via `X-Environment: sandbox` header with separate transactional data.
 
 **Order Status State Machine:** Defines allowed transitions between order statuses (`created` → `scheduled` → `assigned` → `in_progress` → `completed`, with `cancelled` as a possible state at several points).
 

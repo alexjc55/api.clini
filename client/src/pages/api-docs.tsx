@@ -115,7 +115,33 @@ const t = {
       "GET /bonus/transactions/:userId"
     ],
     clientTypesTitle: "Client Types",
-    clientTypesDesc: "OAuth-ready client identification for session tracking"
+    clientTypesDesc: "OAuth-ready client identification for session tracking",
+    webhooksTitle: "Webhooks",
+    webhooksDesc: "Real-time notifications for partners and ERP systems",
+    webhooksEvents: [
+      "order.completed — Order successfully completed",
+      "order.cancelled — Order was cancelled",
+      "order.created — New order placed",
+      "order.assigned — Courier assigned to order",
+      "subscription.created — New subscription created",
+      "bonus.earned — User earned bonus points",
+      "bonus.redeemed — User redeemed bonus points"
+    ],
+    featureFlagsTitle: "Feature Flags",
+    featureFlagsDesc: "System-level feature toggles for gradual rollouts",
+    featureFlagsPoints: [
+      "Enable/disable features globally",
+      "Target specific user types",
+      "Rollout percentage control",
+      "Metadata for additional configuration"
+    ],
+    sandboxModeTitle: "Sandbox Mode",
+    sandboxModeDesc: "Isolated test environment for partner integration",
+    sandboxModePoints: [
+      "Send X-Environment: sandbox header",
+      "Only orders, subscriptions, bonuses can be created",
+      "Other writes blocked with sandbox.write_not_allowed error"
+    ]
   },
   ru: {
     title: "Waste Collection API",
@@ -201,7 +227,33 @@ const t = {
       "GET /bonus/transactions/:userId"
     ],
     clientTypesTitle: "Типы клиентов",
-    clientTypesDesc: "OAuth-ready идентификация клиентов для отслеживания сессий"
+    clientTypesDesc: "OAuth-ready идентификация клиентов для отслеживания сессий",
+    webhooksTitle: "Webhooks",
+    webhooksDesc: "Уведомления в реальном времени для партнёров и ERP систем",
+    webhooksEvents: [
+      "order.completed — Заказ успешно выполнен",
+      "order.cancelled — Заказ отменён",
+      "order.created — Размещён новый заказ",
+      "order.assigned — Курьер назначен на заказ",
+      "subscription.created — Создана новая подписка",
+      "bonus.earned — Пользователь заработал бонусные баллы",
+      "bonus.redeemed — Пользователь использовал бонусные баллы"
+    ],
+    featureFlagsTitle: "Feature Flags",
+    featureFlagsDesc: "Системные переключатели функций для постепенного развёртывания",
+    featureFlagsPoints: [
+      "Включение/отключение функций глобально",
+      "Таргетинг по типам пользователей",
+      "Контроль процента развёртывания",
+      "Метаданные для дополнительной конфигурации"
+    ],
+    sandboxModeTitle: "Sandbox Mode",
+    sandboxModeDesc: "Изолированное тестовое окружение для интеграции партнёров",
+    sandboxModePoints: [
+      "Отправьте заголовок X-Environment: sandbox",
+      "Только заказы, подписки, бонусы могут быть созданы",
+      "Другие записи блокируются с ошибкой sandbox.write_not_allowed"
+    ]
   }
 };
 
@@ -1669,6 +1721,67 @@ export default function ApiDocs() {
   "password": "...",
   "clientId": "my-app-v2",
   "clientType": "mobile_client"
+}`}
+              </pre>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">{tr.webhooksTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{tr.webhooksDesc}</p>
+              <ul className="list-disc list-inside space-y-1 ml-2 text-sm text-muted-foreground">
+                {tr.webhooksEvents.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+{`POST /webhooks
+{
+  "url": "https://your-server.com/webhook",
+  "events": ["order.completed", "order.cancelled"]
+}`}
+              </pre>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">{tr.featureFlagsTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{tr.featureFlagsDesc}</p>
+              <ul className="list-disc list-inside space-y-1 ml-2 text-sm text-muted-foreground">
+                {tr.featureFlagsPoints.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+{`GET /flags/:key
+{
+  "key": "gamification_v2",
+  "enabled": true,
+  "rolloutPercentage": 50,
+  "targetUserTypes": ["client"],
+  "enabledForUser": true
+}`}
+              </pre>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">{tr.sandboxModeTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{tr.sandboxModeDesc}</p>
+              <pre className="bg-muted p-3 rounded-md text-xs">X-Environment: sandbox</pre>
+              <ul className="list-disc list-inside space-y-1 ml-2 text-sm text-muted-foreground">
+                {tr.sandboxModePoints.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+{`GET /environment
+{
+  "mode": "sandbox",
+  "isSandbox": true
 }`}
               </pre>
             </CardContent>

@@ -101,6 +101,25 @@ export const LOCALIZATION_KEYS = {
     level_not_found: "gamification.level_not_found",
     feature_not_found: "gamification.feature_not_found",
   },
+  webhook: {
+    created: "webhook.created",
+    updated: "webhook.updated",
+    deleted: "webhook.deleted",
+    test_sent: "webhook.test_sent",
+    delivery_failed: "webhook.delivery_failed",
+    not_found: "webhook.not_found",
+  },
+  flag: {
+    created: "flag.created",
+    updated: "flag.updated",
+    deleted: "flag.deleted",
+    not_found: "flag.not_found",
+  },
+  sandbox: {
+    mode_active: "sandbox.mode_active",
+    invalid_mode: "sandbox.invalid_mode",
+    write_not_allowed: "sandbox.write_not_allowed",
+  },
 } as const;
 
 export const L = LOCALIZATION_KEYS;

@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
+import { getCurrentEnvironment } from "./environment-context";
 import type {
   User, InsertUser, Role, InsertRole, Permission, InsertPermission,
   Address, InsertAddress, CourierProfile, UpdateCourierProfile,
@@ -20,7 +21,9 @@ import type {
   UserProgress, ProgressTransaction, InsertProgressTransaction, ProgressReason,
   UserStreak, UpdateStreak, StreakType,
   Feature, InsertFeature, FeatureCode,
-  UserFeatureAccess, InsertUserFeatureAccess
+  UserFeatureAccess, InsertUserFeatureAccess,
+  Webhook, InsertWebhook, WebhookDelivery, WebhookEventType, WebhookStatus,
+  FeatureFlag, InsertFeatureFlag, SystemFeatureFlag
 } from "@shared/schema";
 import { userActivityTypes } from "@shared/schema";
 import { IStorage } from "./repositories";
@@ -43,8 +46,19 @@ export class MemStorage implements IStorage {
   private userRoles: Map<string, Set<string>> = new Map();
   private addresses: Map<string, Address> = new Map();
   private courierProfiles: Map<string, CourierProfile> = new Map();
-  private orders: Map<string, Order> = new Map();
-  private orderEvents: Map<string, OrderEvent[]> = new Map();
+  
+  private productionOrders: Map<string, Order> = new Map();
+  private sandboxOrders: Map<string, Order> = new Map();
+  private productionOrderEvents: Map<string, OrderEvent[]> = new Map();
+  private sandboxOrderEvents: Map<string, OrderEvent[]> = new Map();
+  
+  private get orders(): Map<string, Order> {
+    return getCurrentEnvironment() === "sandbox" ? this.sandboxOrders : this.productionOrders;
+  }
+  
+  private get orderEvents(): Map<string, OrderEvent[]> {
+    return getCurrentEnvironment() === "sandbox" ? this.sandboxOrderEvents : this.productionOrderEvents;
+  }
   private auditLogs: AuditLog[] = [];
   private sessions: Map<string, Session> = new Map();
   
@@ -52,10 +66,31 @@ export class MemStorage implements IStorage {
   private events: Map<string, Event> = new Map();
   private userActivities: Map<string, UserActivity[]> = new Map();
   private userFlags: Map<string, Map<UserFlagKey, UserFlag>> = new Map();
-  private bonusAccounts: Map<string, BonusAccount> = new Map();
-  private bonusTransactions: Map<string, BonusTransaction[]> = new Map();
-  private subscriptions: Map<string, Subscription> = new Map();
-  private subscriptionRules: Map<string, SubscriptionRule[]> = new Map();
+  
+  private productionBonusAccounts: Map<string, BonusAccount> = new Map();
+  private sandboxBonusAccounts: Map<string, BonusAccount> = new Map();
+  private productionBonusTransactions: Map<string, BonusTransaction[]> = new Map();
+  private sandboxBonusTransactions: Map<string, BonusTransaction[]> = new Map();
+  private productionSubscriptions: Map<string, Subscription> = new Map();
+  private sandboxSubscriptions: Map<string, Subscription> = new Map();
+  private productionSubscriptionRules: Map<string, SubscriptionRule[]> = new Map();
+  private sandboxSubscriptionRules: Map<string, SubscriptionRule[]> = new Map();
+  
+  private get bonusAccounts(): Map<string, BonusAccount> {
+    return getCurrentEnvironment() === "sandbox" ? this.sandboxBonusAccounts : this.productionBonusAccounts;
+  }
+  
+  private get bonusTransactions(): Map<string, BonusTransaction[]> {
+    return getCurrentEnvironment() === "sandbox" ? this.sandboxBonusTransactions : this.productionBonusTransactions;
+  }
+  
+  private get subscriptions(): Map<string, Subscription> {
+    return getCurrentEnvironment() === "sandbox" ? this.sandboxSubscriptions : this.productionSubscriptions;
+  }
+  
+  private get subscriptionRules(): Map<string, SubscriptionRule[]> {
+    return getCurrentEnvironment() === "sandbox" ? this.sandboxSubscriptionRules : this.productionSubscriptionRules;
+  }
   private subscriptionPlans: Map<string, SubscriptionPlan> = new Map();
   private partners: Map<string, Partner> = new Map();
   private partnerOffers: Map<string, PartnerOffer[]> = new Map();
@@ -1184,6 +1219,153 @@ export class MemStorage implements IStorage {
         }
       }
     }
+  }
+
+  // Webhooks
+  private webhooks: Map<string, Webhook> = new Map();
+  private webhookDeliveries: Map<string, WebhookDelivery> = new Map();
+
+  async createWebhook(partnerId: string, data: InsertWebhook): Promise<Webhook> {
+    const webhook: Webhook = {
+      id: randomUUID(),
+      partnerId,
+      url: data.url,
+      secret: randomUUID().replace(/-/g, ''),
+      events: data.events,
+      status: "active",
+      failCount: 0,
+      lastTriggeredAt: null,
+      createdAt: new Date().toISOString()
+    };
+    this.webhooks.set(webhook.id, webhook);
+    return webhook;
+  }
+
+  async getWebhook(id: string): Promise<Webhook | undefined> {
+    return this.webhooks.get(id);
+  }
+
+  async getWebhooksByPartner(partnerId: string): Promise<Webhook[]> {
+    return Array.from(this.webhooks.values()).filter(w => w.partnerId === partnerId);
+  }
+
+  async getWebhooksByEvent(eventType: WebhookEventType): Promise<Webhook[]> {
+    return Array.from(this.webhooks.values())
+      .filter(w => w.status === "active" && w.events.includes(eventType));
+  }
+
+  async updateWebhook(id: string, data: Partial<InsertWebhook & { status: WebhookStatus }>): Promise<Webhook | undefined> {
+    const webhook = this.webhooks.get(id);
+    if (!webhook) return undefined;
+    
+    if (data.url) webhook.url = data.url;
+    if (data.events) webhook.events = data.events;
+    if (data.status) webhook.status = data.status;
+    
+    this.webhooks.set(id, webhook);
+    return webhook;
+  }
+
+  async deleteWebhook(id: string): Promise<boolean> {
+    return this.webhooks.delete(id);
+  }
+
+  async createWebhookDelivery(webhookId: string, eventType: WebhookEventType, payload: Record<string, unknown>): Promise<WebhookDelivery> {
+    const delivery: WebhookDelivery = {
+      id: randomUUID(),
+      webhookId,
+      eventType,
+      payload,
+      statusCode: null,
+      response: null,
+      attempts: 0,
+      deliveredAt: null,
+      createdAt: new Date().toISOString()
+    };
+    this.webhookDeliveries.set(delivery.id, delivery);
+    return delivery;
+  }
+
+  async updateWebhookDelivery(id: string, statusCode: number, response: string): Promise<void> {
+    const delivery = this.webhookDeliveries.get(id);
+    if (delivery) {
+      delivery.statusCode = statusCode;
+      delivery.response = response;
+      delivery.attempts += 1;
+      if (statusCode >= 200 && statusCode < 300) {
+        delivery.deliveredAt = new Date().toISOString();
+      }
+      this.webhookDeliveries.set(id, delivery);
+    }
+  }
+
+  async getWebhookDeliveries(webhookId: string): Promise<WebhookDelivery[]> {
+    return Array.from(this.webhookDeliveries.values())
+      .filter(d => d.webhookId === webhookId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  // Feature Flags (system-level)
+  private featureFlags: Map<string, FeatureFlag> = new Map();
+
+  async createFeatureFlag(data: InsertFeatureFlag): Promise<FeatureFlag> {
+    const flag: FeatureFlag = {
+      id: randomUUID(),
+      key: data.key,
+      enabled: data.enabled ?? false,
+      rolloutPercentage: data.rolloutPercentage ?? 0,
+      targetUserTypes: data.targetUserTypes ?? [],
+      metadata: data.metadata ?? {},
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+    this.featureFlags.set(flag.id, flag);
+    return flag;
+  }
+
+  async getFeatureFlag(id: string): Promise<FeatureFlag | undefined> {
+    return this.featureFlags.get(id);
+  }
+
+  async getFeatureFlagByKey(key: SystemFeatureFlag): Promise<FeatureFlag | undefined> {
+    return Array.from(this.featureFlags.values()).find(f => f.key === key);
+  }
+
+  async getAllFeatureFlags(): Promise<FeatureFlag[]> {
+    return Array.from(this.featureFlags.values());
+  }
+
+  async updateFeatureFlag(id: string, data: Partial<InsertFeatureFlag>): Promise<FeatureFlag | undefined> {
+    const flag = this.featureFlags.get(id);
+    if (!flag) return undefined;
+    
+    if (data.enabled !== undefined) flag.enabled = data.enabled;
+    if (data.rolloutPercentage !== undefined) flag.rolloutPercentage = data.rolloutPercentage;
+    if (data.targetUserTypes) flag.targetUserTypes = data.targetUserTypes;
+    if (data.metadata) flag.metadata = { ...flag.metadata, ...data.metadata };
+    flag.updatedAt = new Date().toISOString();
+    
+    this.featureFlags.set(id, flag);
+    return flag;
+  }
+
+  async deleteFeatureFlag(id: string): Promise<boolean> {
+    return this.featureFlags.delete(id);
+  }
+
+  async isFeatureEnabled(key: SystemFeatureFlag, userType?: UserType): Promise<boolean> {
+    const flag = await this.getFeatureFlagByKey(key);
+    if (!flag || !flag.enabled) return false;
+    
+    if (flag.targetUserTypes.length > 0 && userType) {
+      if (!flag.targetUserTypes.includes(userType)) return false;
+    }
+    
+    if (flag.rolloutPercentage < 100) {
+      return Math.random() * 100 < flag.rolloutPercentage;
+    }
+    
+    return true;
   }
 }
 

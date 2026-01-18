@@ -7,7 +7,8 @@ import { join } from "path";
 import yaml from "js-yaml";
 import { storage } from "./storage";
 import { generateTokens, refreshAccessToken, revokeUserTokens } from "./auth";
-import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware, requestIdMiddleware, idempotencyMiddleware } from "./middleware";
+import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware, requestIdMiddleware, idempotencyMiddleware, sandboxMiddleware } from "./middleware";
+import { sandboxWriteGuard } from "./sandbox-guard";
 import {
   insertUserSchema, loginSchema, insertAddressSchema, insertOrderSchema,
   updateOrderSchema, updateCourierProfileSchema, insertRoleSchema,
@@ -25,12 +26,16 @@ import {
   insertOrderFinanceSnapshotSchema,
   insertLevelSchema, levelCodes, insertProgressTransactionSchema, progressReasons,
   insertFeatureSchema, featureCodes, insertUserFeatureAccessSchema, featureGrantTypes, streakTypes,
+  insertWebhookSchema, webhookEventTypes,
+  insertFeatureFlagSchema, systemFeatureFlags, environmentModes,
+  type SystemFeatureFlag,
   type ProductEventType, type EventActorType, type UserActivityType, type UserFlagKey, type BonusTransactionType,
   type ProgressReason, type StreakType, type FeatureCode
 } from "@shared/schema";
 import { z } from "zod";
 import { L } from "./localization-keys";
 import { sendLocalizedSuccess } from "./i18n";
+import { dispatchWebhook, dispatchEventToSubscribers } from "./webhooks";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -112,6 +117,8 @@ export async function registerRoutes(
   
   app.use(requestIdMiddleware);
   app.use(i18nMiddleware);
+  app.use(sandboxMiddleware);
+  app.use(sandboxWriteGuard);
   
   const v1Router = ExpressRouter();
 
@@ -145,6 +152,17 @@ export async function registerRoutes(
 
   v1Router.get("/meta/client-types", (_req, res) => {
     res.json(["mobile_client", "courier_app", "erp", "partner", "web"].map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/environment-modes", (_req, res) => {
+    res.json(environmentModes.map(code => ({ code })));
+  });
+
+  v1Router.get("/environment", (req, res) => {
+    res.json({
+      mode: req.environment,
+      isSandbox: req.isSandbox
+    });
   });
 
   v1Router.post("/auth/register", authRateLimiter, async (req, res) => {
@@ -424,6 +442,14 @@ export async function registerRoutes(
       
       await createAuditLogEntry(req.user!.id, "CREATE_ORDER", "order", order.id, {}, { price: order.price });
       
+      dispatchEventToSubscribers("order.created", {
+        orderId: order.id,
+        clientId: order.clientId,
+        addressId: order.addressId,
+        price: order.price,
+        createdAt: order.createdAt
+      });
+      
       res.status(201).json({
         status: "success",
         message: { key: L.order.created, params: { orderId: order.id } },
@@ -562,6 +588,13 @@ export async function registerRoutes(
     await createAuditLogEntry(req.user!.id, "ASSIGN_COURIER", "order", req.params.id,
       { courierId: { from: null, to: courierId } });
     
+    dispatchEventToSubscribers("order.assigned", {
+      orderId: order.id,
+      clientId: order.clientId,
+      courierId,
+      assignedAt: new Date().toISOString()
+    });
+    
     res.json({
       status: "success",
       message: { key: L.order.assigned, params: { orderId: req.params.id, courierId } },
@@ -596,6 +629,15 @@ export async function registerRoutes(
     
     await createAuditLogEntry(req.user!.id, "CANCEL_ORDER", "order", req.params.id,
       { status: { from: order.status, to: "cancelled" } }, { reason: req.body.reason });
+    
+    dispatchEventToSubscribers("order.cancelled", {
+      orderId: order.id,
+      clientId: order.clientId,
+      courierId: order.courierId,
+      previousStatus: order.status,
+      reason: req.body.reason,
+      cancelledAt: new Date().toISOString()
+    });
     
     res.json({
       status: "success",
@@ -695,6 +737,14 @@ export async function registerRoutes(
       orderId: order.id,
       eventType: "completed",
       metadata: {}
+    });
+    
+    dispatchEventToSubscribers("order.completed", {
+      orderId: order.id,
+      clientId: order.clientId,
+      courierId: order.courierId,
+      status: "completed",
+      completedAt: new Date().toISOString()
     });
     
     res.json({
@@ -1022,6 +1072,23 @@ export async function registerRoutes(
       const { userId, ...transactionData } = req.body;
       const data = insertBonusTransactionSchema.parse(transactionData);
       const transaction = await storage.createBonusTransaction(userId, data);
+      
+      if (data.type === "earn") {
+        dispatchEventToSubscribers("bonus.earned", {
+          userId,
+          amount: transaction.amount,
+          reason: transaction.reason,
+          createdAt: transaction.createdAt
+        });
+      } else if (data.type === "spend") {
+        dispatchEventToSubscribers("bonus.redeemed", {
+          userId,
+          amount: transaction.amount,
+          reason: transaction.reason,
+          createdAt: transaction.createdAt
+        });
+      }
+      
       res.status(201).json({ status: "success", data: transaction });
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -1077,6 +1144,15 @@ export async function registerRoutes(
     try {
       const data = insertSubscriptionSchema.parse(req.body);
       const subscription = await storage.createSubscription(req.user!.id, data);
+      
+      dispatchEventToSubscribers("subscription.created", {
+        subscriptionId: subscription.id,
+        userId: subscription.userId,
+        planId: subscription.planId,
+        status: subscription.status,
+        createdAt: subscription.createdAt
+      });
+      
       res.status(201).json({ status: "success", data: subscription });
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -1504,6 +1580,136 @@ export async function registerRoutes(
     const success = await storage.revokeFeatureAccess(req.params.id, req.params.featureId);
     if (!success) return sendError(res, 404, L.common.not_found);
     res.json({ status: "success" });
+  });
+
+  // ==================== WEBHOOKS ====================
+
+  v1Router.get("/meta/webhook-event-types", (_req, res) => {
+    res.json(webhookEventTypes.map(code => ({ code })));
+  });
+
+  v1Router.post("/webhooks", authMiddleware, requireUserType(["staff", "courier"]), async (req, res) => {
+    try {
+      const data = insertWebhookSchema.parse(req.body);
+      const webhook = await storage.createWebhook(req.user!.id, data);
+      res.status(201).json({
+        status: "success",
+        message: { key: L.webhook.created },
+        data: webhook
+      });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.get("/webhooks", authMiddleware, async (req, res) => {
+    const webhooks = await storage.getWebhooksByPartner(req.user!.id);
+    res.json(webhooks.map(w => ({ ...w, secret: w.secret.substring(0, 8) + "..." })));
+  });
+
+  v1Router.get("/webhooks/:id", authMiddleware, async (req, res) => {
+    const webhook = await storage.getWebhook(req.params.id);
+    if (!webhook) return sendError(res, 404, L.common.not_found);
+    if (webhook.partnerId !== req.user!.id && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    res.json({ ...webhook, secret: webhook.secret.substring(0, 8) + "..." });
+  });
+
+  v1Router.patch("/webhooks/:id", authMiddleware, async (req, res) => {
+    const webhook = await storage.getWebhook(req.params.id);
+    if (!webhook) return sendError(res, 404, L.common.not_found);
+    if (webhook.partnerId !== req.user!.id && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    const updated = await storage.updateWebhook(req.params.id, req.body);
+    res.json({ status: "success", data: updated });
+  });
+
+  v1Router.delete("/webhooks/:id", authMiddleware, async (req, res) => {
+    const webhook = await storage.getWebhook(req.params.id);
+    if (!webhook) return sendError(res, 404, L.common.not_found);
+    if (webhook.partnerId !== req.user!.id && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    await storage.deleteWebhook(req.params.id);
+    res.json({ status: "success" });
+  });
+
+  v1Router.get("/webhooks/:id/deliveries", authMiddleware, async (req, res) => {
+    const webhook = await storage.getWebhook(req.params.id);
+    if (!webhook) return sendError(res, 404, L.common.not_found);
+    if (webhook.partnerId !== req.user!.id && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    const deliveries = await storage.getWebhookDeliveries(req.params.id);
+    res.json(deliveries);
+  });
+
+  v1Router.post("/webhooks/:id/test", authMiddleware, async (req, res) => {
+    const webhook = await storage.getWebhook(req.params.id);
+    if (!webhook) return sendError(res, 404, L.common.not_found);
+    if (webhook.partnerId !== req.user!.id && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    const result = await dispatchWebhook(webhook, "order.completed", {
+      orderId: "test-order-123",
+      status: "completed",
+      completedAt: new Date().toISOString()
+    }, true);
+    res.json({ 
+      status: result.success ? "success" : "failed", 
+      message: { key: result.success ? L.webhook.test_sent : L.webhook.delivery_failed }, 
+      statusCode: result.statusCode,
+      error: result.error
+    });
+  });
+
+  // ==================== FEATURE FLAGS (SYSTEM) ====================
+
+  v1Router.get("/flags", authMiddleware, requirePermissions("reports.read"), async (_req, res) => {
+    const flags = await storage.getAllFeatureFlags();
+    res.json(flags);
+  });
+
+  v1Router.get("/flags/:key", authMiddleware, async (req, res) => {
+    const flag = await storage.getFeatureFlagByKey(req.params.key as SystemFeatureFlag);
+    if (!flag) return sendError(res, 404, L.common.not_found);
+    const isEnabled = await storage.isFeatureEnabled(req.params.key as SystemFeatureFlag, req.user!.type);
+    res.json({ ...flag, enabledForUser: isEnabled });
+  });
+
+  v1Router.post("/flags", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    try {
+      const data = insertFeatureFlagSchema.parse(req.body);
+      const flag = await storage.createFeatureFlag(data);
+      res.status(201).json({ status: "success", data: flag });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.patch("/flags/:id", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const flag = await storage.getFeatureFlag(req.params.id);
+    if (!flag) return sendError(res, 404, L.common.not_found);
+    const updated = await storage.updateFeatureFlag(req.params.id, req.body);
+    res.json({ status: "success", data: updated });
+  });
+
+  v1Router.delete("/flags/:id", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const success = await storage.deleteFeatureFlag(req.params.id);
+    if (!success) return sendError(res, 404, L.common.not_found);
+    res.json({ status: "success" });
+  });
+
+  v1Router.get("/meta/feature-flag-keys", (_req, res) => {
+    res.json(systemFeatureFlags.map(code => ({ code })));
   });
 
   // ==================== END V2 ENDPOINTS ====================

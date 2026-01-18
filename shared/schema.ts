@@ -709,3 +709,74 @@ export const insertUserFeatureAccessSchema = z.object({
   expiresAt: z.string().nullable().optional(),
 });
 export type InsertUserFeatureAccess = z.infer<typeof insertUserFeatureAccessSchema>;
+
+// Webhooks
+export const webhookEventTypes = [
+  "order.completed", "order.cancelled", "subscription.created",
+  "order.created", "order.assigned", "bonus.earned", "bonus.redeemed"
+] as const;
+export type WebhookEventType = (typeof webhookEventTypes)[number];
+
+export const webhookStatuses = ["active", "paused", "failed"] as const;
+export type WebhookStatus = (typeof webhookStatuses)[number];
+
+export interface Webhook {
+  id: string;
+  partnerId: string;
+  url: string;
+  secret: string;
+  events: WebhookEventType[];
+  status: WebhookStatus;
+  failCount: number;
+  lastTriggeredAt: string | null;
+  createdAt: string;
+}
+
+export const insertWebhookSchema = z.object({
+  url: z.string().url(),
+  events: z.array(z.enum(webhookEventTypes)).min(1),
+});
+export type InsertWebhook = z.infer<typeof insertWebhookSchema>;
+
+export interface WebhookDelivery {
+  id: string;
+  webhookId: string;
+  eventType: WebhookEventType;
+  payload: Record<string, unknown>;
+  statusCode: number | null;
+  response: string | null;
+  attempts: number;
+  deliveredAt: string | null;
+  createdAt: string;
+}
+
+// Sandbox mode
+export const environmentModes = ["production", "sandbox"] as const;
+export type EnvironmentMode = (typeof environmentModes)[number];
+
+// Feature Flags (system-level, different from user flags)
+export const systemFeatureFlags = [
+  "webhooks_enabled", "sandbox_mode", "gamification_v2",
+  "partner_marketplace", "subscription_auto_renew", "bonus_expiry"
+] as const;
+export type SystemFeatureFlag = (typeof systemFeatureFlags)[number];
+
+export interface FeatureFlag {
+  id: string;
+  key: SystemFeatureFlag;
+  enabled: boolean;
+  rolloutPercentage: number;
+  targetUserTypes: UserType[];
+  metadata: Record<string, unknown>;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export const insertFeatureFlagSchema = z.object({
+  key: z.enum(systemFeatureFlags),
+  enabled: z.boolean().default(false),
+  rolloutPercentage: z.number().min(0).max(100).default(0),
+  targetUserTypes: z.array(z.enum(userTypes)).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+export type InsertFeatureFlag = z.infer<typeof insertFeatureFlagSchema>;

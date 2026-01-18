@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
 import { verifyAccessToken, extractToken } from "./auth";
 import { storage } from "./storage";
-import type { User } from "@shared/schema";
+import type { User, EnvironmentMode } from "@shared/schema";
 import { L } from "./localization-keys";
 import { i18nMiddleware, sendLocalizedError } from "./i18n";
 
@@ -12,6 +12,8 @@ declare global {
       user?: User;
       userPermissions?: string[];
       requestId: string;
+      environment: EnvironmentMode;
+      isSandbox: boolean;
     }
   }
 }
@@ -151,5 +153,24 @@ export function optionalAuth(req: Request, res: Response, next: NextFunction) {
     } else {
       next();
     }
+  });
+}
+
+import { environmentStorage } from "./environment-context";
+
+export function sandboxMiddleware(req: Request, res: Response, next: NextFunction) {
+  const envHeader = req.headers["x-environment"] as string;
+  
+  if (envHeader === "sandbox") {
+    req.environment = "sandbox";
+    req.isSandbox = true;
+    res.setHeader("X-Environment", "sandbox");
+  } else {
+    req.environment = "production";
+    req.isSandbox = false;
+  }
+  
+  environmentStorage.run({ environment: req.environment }, () => {
+    next();
   });
 }
