@@ -7,7 +7,7 @@ import { join } from "path";
 import yaml from "js-yaml";
 import { storage } from "./storage";
 import { generateTokens, refreshAccessToken, revokeUserTokens } from "./auth";
-import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware, requestIdMiddleware, idempotencyMiddleware, sandboxMiddleware } from "./middleware";
+import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware, requestIdMiddleware, idempotencyMiddleware, sandboxMiddleware, metaCacheMiddleware } from "./middleware";
 import { sandboxWriteGuard } from "./sandbox-guard";
 import {
   insertUserSchema, loginSchema, insertAddressSchema, insertOrderSchema,
@@ -126,35 +126,35 @@ export async function registerRoutes(
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  v1Router.get("/meta/order-statuses", (_req, res) => {
+  v1Router.get("/meta/order-statuses", metaCacheMiddleware, (_req, res) => {
     res.json(orderStatuses.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/user-types", (_req, res) => {
+  v1Router.get("/meta/user-types", metaCacheMiddleware, (_req, res) => {
     res.json(userTypes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/user-statuses", (_req, res) => {
+  v1Router.get("/meta/user-statuses", metaCacheMiddleware, (_req, res) => {
     res.json(userStatuses.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/availability-statuses", (_req, res) => {
+  v1Router.get("/meta/availability-statuses", metaCacheMiddleware, (_req, res) => {
     res.json(availabilityStatuses.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/verification-statuses", (_req, res) => {
+  v1Router.get("/meta/verification-statuses", metaCacheMiddleware, (_req, res) => {
     res.json(verificationStatuses.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/order-event-types", (_req, res) => {
+  v1Router.get("/meta/order-event-types", metaCacheMiddleware, (_req, res) => {
     res.json(orderEventTypes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/client-types", (_req, res) => {
+  v1Router.get("/meta/client-types", metaCacheMiddleware, (_req, res) => {
     res.json(["mobile_client", "courier_app", "erp", "partner", "web"].map(code => ({ code })));
   });
 
-  v1Router.get("/meta/environment-modes", (_req, res) => {
+  v1Router.get("/meta/environment-modes", metaCacheMiddleware, (_req, res) => {
     res.json(environmentModes.map(code => ({ code })));
   });
 
@@ -942,43 +942,43 @@ export async function registerRoutes(
   });
 
   // Meta endpoints for v2 enums
-  v1Router.get("/meta/event-types", (_req, res) => {
+  v1Router.get("/meta/event-types", metaCacheMiddleware, (_req, res) => {
     res.json(productEventTypes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/event-actor-types", (_req, res) => {
+  v1Router.get("/meta/event-actor-types", metaCacheMiddleware, (_req, res) => {
     res.json(eventActorTypes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/activity-types", (_req, res) => {
+  v1Router.get("/meta/activity-types", metaCacheMiddleware, (_req, res) => {
     res.json(userActivityTypes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/user-flag-keys", (_req, res) => {
+  v1Router.get("/meta/user-flag-keys", metaCacheMiddleware, (_req, res) => {
     res.json(userFlagKeys.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/bonus-transaction-types", (_req, res) => {
+  v1Router.get("/meta/bonus-transaction-types", metaCacheMiddleware, (_req, res) => {
     res.json(bonusTransactionTypes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/bonus-reasons", (_req, res) => {
+  v1Router.get("/meta/bonus-reasons", metaCacheMiddleware, (_req, res) => {
     res.json(bonusReasons.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/subscription-statuses", (_req, res) => {
+  v1Router.get("/meta/subscription-statuses", metaCacheMiddleware, (_req, res) => {
     res.json(subscriptionStatuses.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/subscription-rule-types", (_req, res) => {
+  v1Router.get("/meta/subscription-rule-types", metaCacheMiddleware, (_req, res) => {
     res.json(subscriptionRuleTypes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/partner-categories", (_req, res) => {
+  v1Router.get("/meta/partner-categories", metaCacheMiddleware, (_req, res) => {
     res.json(partnerCategories.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/partner-statuses", (_req, res) => {
+  v1Router.get("/meta/partner-statuses", metaCacheMiddleware, (_req, res) => {
     res.json(partnerStatuses.map(code => ({ code })));
   });
 
@@ -1349,23 +1349,23 @@ export async function registerRoutes(
   // ==================== GAMIFICATION ENDPOINTS ====================
 
   // Meta endpoints for gamification
-  v1Router.get("/meta/level-codes", (_req, res) => {
+  v1Router.get("/meta/level-codes", metaCacheMiddleware, (_req, res) => {
     res.json(levelCodes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/progress-reasons", (_req, res) => {
+  v1Router.get("/meta/progress-reasons", metaCacheMiddleware, (_req, res) => {
     res.json(progressReasons.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/streak-types", (_req, res) => {
+  v1Router.get("/meta/streak-types", metaCacheMiddleware, (_req, res) => {
     res.json(streakTypes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/feature-codes", (_req, res) => {
+  v1Router.get("/meta/feature-codes", metaCacheMiddleware, (_req, res) => {
     res.json(featureCodes.map(code => ({ code })));
   });
 
-  v1Router.get("/meta/feature-grant-types", (_req, res) => {
+  v1Router.get("/meta/feature-grant-types", metaCacheMiddleware, (_req, res) => {
     res.json(featureGrantTypes.map(code => ({ code })));
   });
 
@@ -1584,7 +1584,7 @@ export async function registerRoutes(
 
   // ==================== WEBHOOKS ====================
 
-  v1Router.get("/meta/webhook-event-types", (_req, res) => {
+  v1Router.get("/meta/webhook-event-types", metaCacheMiddleware, (_req, res) => {
     res.json(webhookEventTypes.map(code => ({ code })));
   });
 
@@ -1708,7 +1708,7 @@ export async function registerRoutes(
     res.json({ status: "success" });
   });
 
-  v1Router.get("/meta/feature-flag-keys", (_req, res) => {
+  v1Router.get("/meta/feature-flag-keys", metaCacheMiddleware, (_req, res) => {
     res.json(systemFeatureFlags.map(code => ({ code })));
   });
 

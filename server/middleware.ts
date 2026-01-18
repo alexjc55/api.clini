@@ -157,6 +157,27 @@ export function optionalAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 import { environmentStorage } from "./environment-context";
+import { createHash } from "crypto";
+
+export function metaCacheMiddleware(req: Request, res: Response, next: NextFunction) {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  
+  const originalJson = res.json.bind(res);
+  res.json = function(body: unknown) {
+    const bodyStr = JSON.stringify(body);
+    const etag = `"${createHash("md5").update(bodyStr).digest("hex")}"`;
+    res.setHeader("ETag", etag);
+    
+    const ifNoneMatch = req.headers["if-none-match"];
+    if (ifNoneMatch === etag) {
+      return res.status(304).end();
+    }
+    
+    return originalJson(body);
+  };
+  
+  next();
+}
 
 export function sandboxMiddleware(req: Request, res: Response, next: NextFunction) {
   const envHeader = req.headers["x-environment"] as string;

@@ -616,6 +616,11 @@ All other write operations (POST, PATCH, PUT, DELETE) return:
 
 ## Meta Endpoints (Updated)
 
+**Caching:**
+- `Cache-Control: public, max-age=300` (5 minutes)
+- `ETag` header for conditional requests
+- 304 Not Modified responses when content unchanged
+
 | Endpoint | Description |
 |----------|-------------|
 | `GET /meta/roles` | Available roles |
