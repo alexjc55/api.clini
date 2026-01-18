@@ -26,6 +26,8 @@ servers:
     description: Legacy (deprecated)
 
 tags:
+  - name: system
+    description: Системные endpoints (health, meta)
   - name: auth
     description: Аутентификация и сессии
   - name: users
@@ -42,6 +44,134 @@ tags:
     description: Аудит лог (ERP)
 
 paths:
+  /health:
+    get:
+      tags: [system]
+      summary: Healthcheck
+      description: Проверка работоспособности API
+      responses:
+        '200':
+          description: API работает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /meta/order-statuses:
+    get:
+      tags: [system]
+      summary: Список статусов заказа
+      responses:
+        '200':
+          description: Список статусов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [created, scheduled, assigned, in_progress, completed, cancelled]
+
+  /meta/user-types:
+    get:
+      tags: [system]
+      summary: Список типов пользователей
+      responses:
+        '200':
+          description: Список типов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [client, courier, staff]
+
+  /meta/user-statuses:
+    get:
+      tags: [system]
+      summary: Список статусов пользователей
+      responses:
+        '200':
+          description: Список статусов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [active, blocked, pending]
+
+  /meta/availability-statuses:
+    get:
+      tags: [system]
+      summary: Список статусов доступности курьера
+      responses:
+        '200':
+          description: Список статусов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [available, busy, offline]
+
+  /meta/verification-statuses:
+    get:
+      tags: [system]
+      summary: Список статусов верификации
+      responses:
+        '200':
+          description: Список статусов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [pending, verified, rejected]
+
+  /meta/order-event-types:
+    get:
+      tags: [system]
+      summary: Список типов событий заказа
+      responses:
+        '200':
+          description: Список типов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [created, scheduled, assigned, started, completed, cancelled, status_changed, courier_changed, price_changed, note_added]
+
   /auth/register:
     post:
       tags: [auth]
@@ -1013,3 +1143,69 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    ErrorResponse:
+      type: object
+      description: Стандартный формат ошибки
+      properties:
+        error:
+          type: object
+          properties:
+            key:
+              type: string
+              description: Ключ локализации для отображения ошибки
+              example: "auth.invalid_credentials"
+            params:
+              type: object
+              description: Параметры для подстановки в локализованный текст
+              additionalProperties: true
+      example:
+        error:
+          key: "auth.invalid_credentials"
+          params: {}
+
+    ErrorKeys:
+      type: object
+      description: |
+        Справочник ключей ошибок для обработки на фронтенде.
+        
+        **Auth (auth.*)**
+        - auth.invalid_credentials — неверные учётные данные
+        - auth.token_expired — токен истёк
+        - auth.token_invalid — невалидный токен
+        - auth.user_blocked — пользователь заблокирован
+        - auth.user_deleted — пользователь удалён
+        
+        **Order (order.*)**
+        - order.not_found — заказ не найден
+        - order.forbidden — нет доступа к заказу
+        - order.already_deleted — заказ уже удалён
+        - order.invalid_status_transition — недопустимый переход статуса
+        - order.already_assigned — заказ уже назначен
+        - order.not_assigned — заказ не назначен курьеру
+        
+        **Address (address.*)**
+        - address.not_found — адрес не найден
+        - address.forbidden — нет доступа к адресу
+        - address.already_deleted — адрес уже удалён
+        
+        **User (user.*)**
+        - user.not_found — пользователь не найден
+        - user.already_deleted — пользователь уже удалён
+        
+        **Courier (courier.*)**
+        - courier.not_found — курьер не найден
+        - courier.profile_not_found — профиль курьера не найден
+        
+        **Common (common.*)**
+        - common.validation_error — ошибка валидации
+        - common.forbidden — доступ запрещён
+        - common.not_found — ресурс не найден
+        - common.conflict — конфликт состояния
+        - common.rate_limit_exceeded — превышен лимит запросов
+        - common.internal_error — внутренняя ошибка сервера
+        
+        **Session (session.*)**
+        - session.device_not_found — устройство/сессия не найдена
+        - session.deleted — сессия удалена
+        - session.all_sessions_deleted — все сессии удалены

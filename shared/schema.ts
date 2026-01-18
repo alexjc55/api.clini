@@ -220,8 +220,8 @@ export type RegisterRequest = z.infer<typeof registerSchema>;
 
 export interface ApiError {
   error: {
-    code: string;
-    message: string;
+    key: string;
+    params: Record<string, unknown>;
   };
 }
 

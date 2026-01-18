@@ -205,6 +205,15 @@ session.all_sessions_deleted
 
 ## API Endpoints (v1)
 
+### Системные
+- `GET /api/v1/health` — Healthcheck (`{ status: "ok", timestamp: "ISO8601" }`)
+- `GET /api/v1/meta/order-statuses` — Список статусов заказов
+- `GET /api/v1/meta/user-types` — Список типов пользователей
+- `GET /api/v1/meta/user-statuses` — Список статусов пользователей
+- `GET /api/v1/meta/availability-statuses` — Статусы доступности курьеров
+- `GET /api/v1/meta/verification-statuses` — Статусы верификации
+- `GET /api/v1/meta/order-event-types` — Типы событий заказов
+
 ### Аутентификация
 - `POST /api/v1/auth/register` — Регистрация
 - `POST /api/v1/auth/login` — Авторизация (создаёт сессию)

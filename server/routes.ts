@@ -10,7 +10,8 @@ import { generateTokens, refreshAccessToken, revokeUserTokens } from "./auth";
 import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware } from "./middleware";
 import {
   insertUserSchema, loginSchema, insertAddressSchema, insertOrderSchema,
-  updateOrderSchema, updateCourierProfileSchema, insertRoleSchema, orderStatuses,
+  updateOrderSchema, updateCourierProfileSchema, insertRoleSchema,
+  orderStatuses, userTypes, userStatuses, availabilityStatuses, verificationStatuses, orderEventTypes,
   isValidStatusTransition, type OrderStatus, type AuditAction
 } from "@shared/schema";
 import { z } from "zod";
@@ -72,6 +73,34 @@ export async function registerRoutes(
   app.use(i18nMiddleware);
   
   const v1Router = ExpressRouter();
+
+  v1Router.get("/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  v1Router.get("/meta/order-statuses", (_req, res) => {
+    res.json(orderStatuses.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/user-types", (_req, res) => {
+    res.json(userTypes.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/user-statuses", (_req, res) => {
+    res.json(userStatuses.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/availability-statuses", (_req, res) => {
+    res.json(availabilityStatuses.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/verification-statuses", (_req, res) => {
+    res.json(verificationStatuses.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/order-event-types", (_req, res) => {
+    res.json(orderEventTypes.map(code => ({ code })));
+  });
 
   v1Router.post("/auth/register", authRateLimiter, async (req, res) => {
     try {
