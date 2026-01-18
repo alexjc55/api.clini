@@ -50,6 +50,7 @@ export interface AuditLog {
   userId: string;
   userRole: string;
   action: string;
+  messageKey: string;
   entity: string;
   entityId: string;
   changes: Record<string, { from: unknown; to: unknown }>;
@@ -59,7 +60,7 @@ export interface AuditLog {
 
 export const auditActions = [
   "CREATE_USER", "UPDATE_USER", "DELETE_USER", "BLOCK_USER",
-  "CREATE_ORDER", "UPDATE_ORDER", "ASSIGN_COURIER", "CANCEL_ORDER",
+  "CREATE_ORDER", "UPDATE_ORDER", "DELETE_ORDER", "ASSIGN_COURIER", "CANCEL_ORDER",
   "CREATE_ROLE", "UPDATE_ROLE", "ASSIGN_ROLE",
   "VERIFY_COURIER"
 ] as const;

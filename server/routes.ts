@@ -22,6 +22,22 @@ const authRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const AUDIT_MESSAGE_KEYS: Record<AuditAction, string> = {
+  CREATE_USER: L.audit.user_created,
+  UPDATE_USER: L.audit.user_updated,
+  DELETE_USER: L.audit.user_deleted,
+  BLOCK_USER: L.audit.user_blocked,
+  CREATE_ORDER: L.audit.order_created,
+  UPDATE_ORDER: L.audit.order_updated,
+  DELETE_ORDER: L.audit.order_deleted,
+  ASSIGN_COURIER: L.audit.order_assigned,
+  CANCEL_ORDER: L.audit.order_cancelled,
+  VERIFY_COURIER: L.audit.courier_verified,
+  CREATE_ROLE: L.audit.role_created,
+  UPDATE_ROLE: L.audit.role_updated,
+  ASSIGN_ROLE: L.audit.user_roles_assigned,
+};
+
 async function createAuditLogEntry(
   userId: string,
   action: AuditAction,
@@ -35,6 +51,7 @@ async function createAuditLogEntry(
     userId,
     userRole: userRoles.map(r => r.name).join(","),
     action,
+    messageKey: AUDIT_MESSAGE_KEYS[action],
     entity,
     entityId,
     changes,
@@ -740,11 +757,14 @@ export async function registerRoutes(
     const session = sessions.find(s => s.id === req.params.id);
     
     if (!session) {
-      return sendError(res, 404, L.auth.session_not_found, { sessionId: req.params.id });
+      return sendError(res, 404, L.session.device_not_found, { sessionId: req.params.id as string });
     }
     
-    await storage.deleteSession(req.params.id);
-    res.status(204).send();
+    await storage.deleteSession(req.params.id as string);
+    res.json({ 
+      status: "success", 
+      message: { key: L.session.deleted, params: { sessionId: req.params.id } } 
+    });
   });
 
   v1Router.post("/auth/logout-all", authMiddleware, async (req, res) => {
@@ -752,7 +772,7 @@ export async function registerRoutes(
     revokeUserTokens(req.user!.id);
     res.json({ 
       status: "success", 
-      message: { key: L.auth.logout_all_success } 
+      message: { key: L.session.all_sessions_deleted } 
     });
   });
 

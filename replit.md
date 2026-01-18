@@ -110,22 +110,34 @@ Accept-Language: he | ru | ar | en
 
 Логируемые действия (`AuditAction`):
 - `CREATE_USER`, `UPDATE_USER`, `DELETE_USER`, `BLOCK_USER`
-- `CREATE_ORDER`, `UPDATE_ORDER`, `CANCEL_ORDER`
+- `CREATE_ORDER`, `UPDATE_ORDER`, `DELETE_ORDER`, `CANCEL_ORDER`
 - `ASSIGN_COURIER`, `VERIFY_COURIER`
-- `CREATE_ROLE`, `ASSIGN_ROLE`
+- `CREATE_ROLE`, `UPDATE_ROLE`, `ASSIGN_ROLE`
 
-Формат записи:
+Формат записи с i18n:
 ```json
 {
   "userId": "who",
   "userRole": "admin",
   "action": "VERIFY_COURIER",
+  "messageKey": "audit.courier.verified",
   "entity": "courier",
   "entityId": "courier-uuid",
   "changes": { "field": { "from": "old", "to": "new" } },
-  "metadata": {},
+  "metadata": { "courierId": "courier-uuid" },
   "createdAt": "ISO8601"
 }
+```
+
+### i18n ключи для аудита
+
+```
+audit.user.created, audit.user.updated, audit.user.deleted, audit.user.blocked
+audit.user.roles_assigned
+audit.order.created, audit.order.updated, audit.order.deleted, audit.order.cancelled
+audit.order.assigned
+audit.courier.verified
+audit.role.created, audit.role.updated
 ```
 
 ## Device/Session Tracking
@@ -141,6 +153,15 @@ Accept-Language: he | ru | ar | en
 ```
 
 Обновление `lastSeenAt` при refresh token.
+
+### i18n ключи для сессий
+
+```
+session.created
+session.deleted
+session.device_not_found
+session.all_sessions_deleted
+```
 
 ## Структура проекта
 

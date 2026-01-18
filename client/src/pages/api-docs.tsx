@@ -478,7 +478,7 @@ const apiSections: ApiSection[] = [
         description: { en: "View staff action history. Filters: ?userId, ?entity, ?entityId, ?action", ru: "Просмотр истории действий персонала. Фильтры: ?userId, ?entity, ?entityId, ?action" },
         auth: true,
         permissions: ["users.manage"],
-        responseExample: { logs: [{ id: "log-uuid", userId: "staff-uuid", userRole: "admin", action: "VERIFY_COURIER", entity: "courier", entityId: "courier-uuid", changes: { verificationStatus: { from: "pending", to: "verified" } }, createdAt: "2026-01-15T10:30:00Z" }], total: 100, page: 1, limit: 50 }
+        responseExample: { logs: [{ id: "log-uuid", userId: "staff-uuid", userRole: "admin", action: "VERIFY_COURIER", messageKey: "audit.courier.verified", entity: "courier", entityId: "courier-uuid", changes: { verificationStatus: { from: "pending", to: "verified" } }, metadata: { courierId: "courier-uuid" }, createdAt: "2026-01-15T10:30:00Z" }], total: 100, page: 1, limit: 50 }
       }
     ]
   }
