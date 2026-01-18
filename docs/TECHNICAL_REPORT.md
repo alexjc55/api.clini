@@ -660,3 +660,125 @@ All other write operations (POST, PATCH, PUT, DELETE) return:
 - YAML: `GET /api/v1/openapi.yaml`
 
 Full specification includes all endpoints, schemas, and examples.
+
+---
+
+## Project Documentation
+
+### Documentation Suite
+
+The project includes enterprise-level documentation for open-source readiness:
+
+| Document | Location | Description |
+|----------|----------|-------------|
+| README.md | `/README.md` | Project overview, features, quickstart guide |
+| CONTRIBUTING.md | `/CONTRIBUTING.md` | Contribution guidelines, code standards, PR process |
+| ARCHITECTURE.md | `/docs/ARCHITECTURE.md` | System design, component diagrams, data model |
+| SECURITY.md | `/SECURITY.md` | Security policy, vulnerability reporting |
+| CONTRACT_POLICY.md | `/docs/CONTRACT_POLICY.md` | Immutable API contract policy |
+| TECHNICAL_REPORT.md | `/docs/TECHNICAL_REPORT.md` | This document |
+
+### Web Documentation
+
+Interactive API documentation available at:
+- **Web UI:** `/api-docs` route in web application
+- **OpenAPI JSON:** `GET /api/v1/openapi.json`
+- **OpenAPI YAML:** `GET /api/v1/openapi.yaml`
+
+### Key Documentation Features
+
+**README.md:**
+- Feature overview with 40+ capabilities
+- Quick start (5 steps)
+- API endpoint reference by category
+- Tech stack and project structure
+
+**CONTRIBUTING.md:**
+- Development environment setup
+- Code style guidelines
+- Commit message conventions
+- Pull request workflow
+
+**ARCHITECTURE.md:**
+- ASCII architecture diagrams
+- Component breakdown (Router, Middleware, Storage)
+- Data model with entity relationships
+- Middleware pipeline documentation
+- Security and scalability considerations
+
+**SECURITY.md:**
+- Vulnerability disclosure policy
+- Authentication details (bcrypt cost 10, JWT HS256)
+- RBAC implementation
+- Rate limiting (10 requests / 15 min for auth)
+- Webhook HMAC-SHA256 verification examples
+
+---
+
+## Storage Architecture
+
+### MVP Implementation
+
+Current implementation uses in-memory storage (`MemStorage`) for rapid development and testing:
+
+```
+IStorage Interface
+       |
+       v
+  MemStorage
+  (In-Memory Maps)
+```
+
+**Characteristics:**
+- Data persists only during runtime
+- Fast read/write operations
+- No external dependencies
+- Suitable for development and testing
+
+### Production Ready
+
+PostgreSQL storage ready via Drizzle ORM:
+
+```
+IStorage Interface
+       |
+       v
+ DatabaseStorage
+ (PostgreSQL + Drizzle)
+```
+
+**Activation:**
+Set `DATABASE_URL` environment variable to switch to persistent storage.
+
+**Features:**
+- Transactional consistency
+- Data persistence across restarts
+- Migrations via Drizzle Kit
+- Connection pooling
+
+---
+
+## Rate Limiting
+
+| Endpoint Category | Limit | Window |
+|-------------------|-------|--------|
+| `/auth/login` | 10 requests | 15 minutes |
+| `/auth/register` | 10 requests | 15 minutes |
+| `/auth/refresh` | 10 requests | 15 minutes |
+| General API | Configurable | Via reverse proxy |
+
+Implementation: `express-rate-limit` middleware applied to authentication endpoints.
+
+---
+
+## Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0 | Initial | Core API with RBAC, orders, users |
+| 1.1 | Update | Gamification system (levels, streaks, features) |
+| 1.2 | Update | Bonus system, subscriptions, partners |
+| 1.3 | Update | Webhooks with HMAC signing |
+| 1.4 | Update | Feature flags, sandbox mode |
+| 1.5 | Update | Meta endpoint caching, ETag support |
+| 1.6 | Update | Enterprise documentation suite |
