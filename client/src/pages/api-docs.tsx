@@ -102,6 +102,40 @@ const apiSections: ApiSection[] = [
           status: "active",
           createdAt: "2024-01-15T10:30:00Z"
         }
+      },
+      {
+        method: "GET",
+        path: "/api/auth/sessions",
+        summary: "Мои активные сессии",
+        description: "Список всех активных сессий пользователя с информацией об устройствах",
+        auth: true,
+        responseExample: [
+          {
+            id: "session-uuid",
+            deviceId: "device-123",
+            platform: "ios",
+            lastSeenAt: "2026-01-15T10:30:00Z",
+            createdAt: "2026-01-10T08:00:00Z"
+          }
+        ]
+      },
+      {
+        method: "DELETE",
+        path: "/api/auth/sessions/:id",
+        summary: "Выход с устройства",
+        description: "Удаляет сессию (выход с конкретного устройства)",
+        auth: true
+      },
+      {
+        method: "POST",
+        path: "/api/auth/logout-all",
+        summary: "Выход со всех устройств",
+        description: "Удаляет все сессии и отзывает все токены пользователя",
+        auth: true,
+        responseExample: {
+          status: "success",
+          message: { key: "auth.logout_all_success" }
+        }
       }
     ]
   },
@@ -164,6 +198,18 @@ const apiSections: ApiSection[] = [
         permissions: ["users.manage"],
         requestBody: {
           roleIds: ["role-uuid-1", "role-uuid-2"]
+        }
+      },
+      {
+        method: "DELETE",
+        path: "/api/users/:id",
+        summary: "Soft delete пользователя",
+        description: "Мягкое удаление пользователя (устанавливает deletedAt). Используйте ?includeDeleted=true для просмотра удалённых",
+        auth: true,
+        permissions: ["users.manage"],
+        responseExample: {
+          status: "success",
+          message: { key: "user.deleted", params: { userId: "uuid" } }
         }
       }
     ]
@@ -433,6 +479,65 @@ const apiSections: ApiSection[] = [
         responseExample: [
           { id: "perm-uuid", name: "orders.read", description: "Просмотр заказов" }
         ]
+      },
+      {
+        method: "GET",
+        path: "/api/couriers",
+        summary: "Список курьеров",
+        description: "Получение списка всех курьеров с профилями (ERP)",
+        auth: true,
+        permissions: ["users.read"],
+        responseExample: [
+          {
+            id: "courier-uuid",
+            phone: "+79991234567",
+            profile: {
+              availabilityStatus: "available",
+              verificationStatus: "verified",
+              rating: 4.8
+            }
+          }
+        ]
+      },
+      {
+        method: "PATCH",
+        path: "/api/couriers/:id/verify",
+        summary: "Верификация курьера",
+        description: "Изменение статуса верификации курьера (verified/rejected)",
+        auth: true,
+        permissions: ["couriers.verify"],
+        requestBody: {
+          status: "verified"
+        },
+        responseExample: {
+          status: "success",
+          message: { key: "courier.verified", params: { courierId: "uuid", status: "verified" } }
+        }
+      },
+      {
+        method: "GET",
+        path: "/api/audit-logs",
+        summary: "Audit log",
+        description: "Просмотр истории действий персонала. Фильтры: ?userId, ?entity, ?entityId",
+        auth: true,
+        permissions: ["users.manage"],
+        responseExample: {
+          logs: [
+            {
+              id: "log-uuid",
+              userId: "staff-uuid",
+              userRole: "admin",
+              action: "VERIFY_COURIER",
+              entity: "courier",
+              entityId: "courier-uuid",
+              changes: { verificationStatus: { from: "pending", to: "verified" } },
+              createdAt: "2026-01-15T10:30:00Z"
+            }
+          ],
+          total: 100,
+          page: 1,
+          limit: 50
+        }
       }
     ]
   }
