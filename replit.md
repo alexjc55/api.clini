@@ -86,6 +86,8 @@ Accept-Language: he | ru | ar | en
 │           └── api-docs.tsx  # Интерактивная документация
 ├── server/
 │   ├── auth.ts            # JWT аутентификация
+│   ├── i18n.ts            # i18n middleware (Accept-Language)
+│   ├── localization-keys.ts # Каталог ключей локализации
 │   ├── middleware.ts      # RBAC middleware
 │   ├── routes.ts          # API endpoints
 │   └── storage.ts         # In-memory хранилище
