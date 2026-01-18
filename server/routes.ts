@@ -7,7 +7,7 @@ import { join } from "path";
 import yaml from "js-yaml";
 import { storage } from "./storage";
 import { generateTokens, refreshAccessToken, revokeUserTokens } from "./auth";
-import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware } from "./middleware";
+import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware, requestIdMiddleware, idempotencyMiddleware } from "./middleware";
 import {
   insertUserSchema, loginSchema, insertAddressSchema, insertOrderSchema,
   updateOrderSchema, updateCourierProfileSchema, insertRoleSchema,
@@ -88,6 +88,21 @@ async function createAuditLogEntry(
   });
 }
 
+function paginate<T>(items: T[], page: number, perPage: number): { data: T[]; meta: { page: number; perPage: number; total: number; hasNext: boolean } } {
+  const total = items.length;
+  const start = (page - 1) * perPage;
+  const paginatedItems = items.slice(start, start + perPage);
+  return {
+    data: paginatedItems,
+    meta: {
+      page,
+      perPage,
+      total,
+      hasNext: start + perPage < total
+    }
+  };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -95,6 +110,7 @@ export async function registerRoutes(
   
   await storage.initDefaults();
   
+  app.use(requestIdMiddleware);
   app.use(i18nMiddleware);
   
   const v1Router = ExpressRouter();
@@ -127,6 +143,10 @@ export async function registerRoutes(
     res.json(orderEventTypes.map(code => ({ code })));
   });
 
+  v1Router.get("/meta/client-types", (_req, res) => {
+    res.json(["mobile_client", "courier_app", "erp", "partner", "web"].map(code => ({ code })));
+  });
+
   v1Router.post("/auth/register", authRateLimiter, async (req, res) => {
     try {
       const data = insertUserSchema.parse(req.body);
@@ -157,7 +177,7 @@ export async function registerRoutes(
   v1Router.post("/auth/login", authRateLimiter, async (req, res) => {
     try {
       const data = loginSchema.parse(req.body);
-      const { deviceId, platform } = req.body;
+      const { deviceId, platform, clientId, clientType } = req.body;
       
       const user = await storage.verifyUserPassword(data.phone, data.password);
       if (!user) {
@@ -180,7 +200,9 @@ export async function registerRoutes(
         tokens.refreshToken,
         deviceId || "unknown",
         platform || "web",
-        userAgent
+        userAgent,
+        clientId,
+        clientType
       );
       
       res.json({
@@ -230,24 +252,19 @@ export async function registerRoutes(
   });
 
   v1Router.get("/users", authMiddleware, requirePermissions("users.read"), async (req, res) => {
-    const { type, status, includeDeleted, page = "1", limit = "20" } = req.query;
+    const { type, status, includeDeleted, page = "1", perPage = "20" } = req.query;
     const users = await storage.getUsers({
       type: type as any,
       status: status as any,
       includeDeleted: includeDeleted === "true"
     });
     
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const start = (pageNum - 1) * limitNum;
-    const paginatedUsers = users.slice(start, start + limitNum);
+    const pageNum = parseInt(page as string) || 1;
+    const perPageNum = parseInt(perPage as string) || 20;
+    const sanitizedUsers = users.map(({ passwordHash, ...u }) => u);
+    const result = paginate(sanitizedUsers, pageNum, perPageNum);
     
-    res.json({
-      users: paginatedUsers.map(({ passwordHash, ...u }) => u),
-      total: users.length,
-      page: pageNum,
-      limit: limitNum
-    });
+    res.json(result);
   });
 
   v1Router.get("/users/:id", authMiddleware, requirePermissions("users.read"), async (req, res) => {
@@ -391,7 +408,7 @@ export async function registerRoutes(
     });
   });
 
-  v1Router.post("/orders", authMiddleware, async (req, res) => {
+  v1Router.post("/orders", authMiddleware, idempotencyMiddleware("/orders"), async (req, res) => {
     try {
       const data = insertOrderSchema.parse(req.body);
       
@@ -421,7 +438,7 @@ export async function registerRoutes(
   });
 
   v1Router.get("/orders", authMiddleware, async (req, res) => {
-    const { status, includeDeleted, page = "1", limit = "20" } = req.query;
+    const { status, includeDeleted, page = "1", perPage = "20" } = req.query;
     
     let orders;
     const filters: { clientId?: string; courierId?: string; status?: OrderStatus; includeDeleted?: boolean } = {
@@ -437,17 +454,11 @@ export async function registerRoutes(
       orders = await storage.getOrders({ ...filters, clientId: req.user!.id });
     }
     
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const start = (pageNum - 1) * limitNum;
-    const paginatedOrders = orders.slice(start, start + limitNum);
+    const pageNum = parseInt(page as string) || 1;
+    const perPageNum = parseInt(perPage as string) || 20;
+    const result = paginate(orders, pageNum, perPageNum);
     
-    res.json({
-      orders: paginatedOrders,
-      total: orders.length,
-      page: pageNum,
-      limit: limitNum
-    });
+    res.json(result);
   });
 
   v1Router.get("/orders/:id", authMiddleware, async (req, res) => {
@@ -783,7 +794,7 @@ export async function registerRoutes(
   });
 
   v1Router.get("/audit-logs", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
-    const { userId, entity, entityId, action, page = "1", limit = "50" } = req.query;
+    const { userId, entity, entityId, action, page = "1", perPage = "50" } = req.query;
     const logs = await storage.getAuditLogs({
       userId: userId as string,
       entity: entity as string,
@@ -791,17 +802,11 @@ export async function registerRoutes(
       action: action as string
     });
     
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    const start = (pageNum - 1) * limitNum;
-    const paginatedLogs = logs.slice(start, start + limitNum);
+    const pageNum = parseInt(page as string) || 1;
+    const perPageNum = parseInt(perPage as string) || 50;
+    const result = paginate(logs, pageNum, perPageNum);
     
-    res.json({
-      logs: paginatedLogs,
-      total: logs.length,
-      page: pageNum,
-      limit: limitNum
-    });
+    res.json(result);
   });
 
   v1Router.get("/auth/sessions", authMiddleware, async (req, res) => {
@@ -864,6 +869,8 @@ export async function registerRoutes(
     const entityId = getQueryParam(req, "entityId");
     const from = getQueryParam(req, "from");
     const to = getQueryParam(req, "to");
+    const page = getQueryParam(req, "page") || "1";
+    const perPage = getQueryParam(req, "perPage") || "20";
     if (type) filters.type = type as ProductEventType;
     if (actorType) filters.actorType = actorType as EventActorType;
     if (actorId) filters.actorId = actorId;
@@ -872,7 +879,10 @@ export async function registerRoutes(
     if (from) filters.from = from;
     if (to) filters.to = to;
     const events = await storage.getEvents(filters);
-    res.json(events);
+    const pageNum = parseInt(page) || 1;
+    const perPageNum = parseInt(perPage) || 20;
+    const result = paginate(events, pageNum, perPageNum);
+    res.json(result);
   });
 
   v1Router.get("/events/:id", authMiddleware, requirePermissions("reports.read"), async (req, res) => {
@@ -1007,7 +1017,7 @@ export async function registerRoutes(
     res.json(account);
   });
 
-  v1Router.post("/bonus/transactions", authMiddleware, requirePermissions("payments.read"), async (req, res) => {
+  v1Router.post("/bonus/transactions", authMiddleware, requirePermissions("payments.read"), idempotencyMiddleware("/bonus/transactions"), async (req, res) => {
     try {
       const { userId, ...transactionData } = req.body;
       const data = insertBonusTransactionSchema.parse(transactionData);
@@ -1030,11 +1040,16 @@ export async function registerRoutes(
     const type = getQueryParam(req, "type");
     const from = getQueryParam(req, "from");
     const to = getQueryParam(req, "to");
+    const page = getQueryParam(req, "page") || "1";
+    const perPage = getQueryParam(req, "perPage") || "20";
     if (type) filters.type = type as BonusTransactionType;
     if (from) filters.from = from;
     if (to) filters.to = to;
     const transactions = await storage.getBonusTransactions(userId, filters);
-    res.json(transactions);
+    const pageNum = parseInt(page) || 1;
+    const perPageNum = parseInt(perPage) || 20;
+    const result = paginate(transactions, pageNum, perPageNum);
+    res.json(result);
   });
 
   // Subscriptions

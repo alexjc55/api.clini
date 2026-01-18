@@ -10,11 +10,43 @@ info:
     - **Soft Delete**: User, Order, CourierProfile, Address с `?includeDeleted=true`
     - **Audit Logging**: Все staff-действия логируются
     - **JWT Auth**: Access + Refresh токены
+    - **Idempotency**: POST-запросы поддерживают `Idempotency-Key` заголовок
+    - **Request Tracking**: Все запросы имеют `X-Request-Id` для логирования
     
     ## Аутентификация
     Все защищённые endpoints требуют заголовок:
     ```
     Authorization: Bearer <access_token>
+    ```
+    
+    ## Стандартные заголовки
+    | Header | Описание | Пример |
+    |--------|----------|--------|
+    | `X-Request-Id` | ID запроса для трассировки (генерируется если не передан) | `550e8400-e29b-41d4-a716-446655440000` |
+    | `Idempotency-Key` | Ключ идемпотентности для POST (предотвращает дубли) | `uuid-v4` |
+    | `Accept-Language` | Предпочитаемый язык ответа | `he`, `ru`, `ar`, `en` |
+    
+    ## Формат ошибок (Immutable Contract)
+    ```json
+    {
+      "error": {
+        "key": "order.not_found",
+        "params": { "orderId": "123" }
+      }
+    }
+    ```
+    
+    ## Формат пагинации
+    ```json
+    {
+      "data": [...],
+      "meta": {
+        "page": 1,
+        "perPage": 20,
+        "total": 134,
+        "hasNext": true
+      }
+    }
     ```
   version: 1.0.0
   contact:
@@ -2286,3 +2318,80 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    # ==================== STANDARD CONTRACTS ====================
+
+    ApiError:
+      type: object
+      description: Стандартный формат ошибки (immutable contract)
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [key]
+          properties:
+            key:
+              type: string
+              description: Ключ локализации для клиентского перевода
+              example: "order.not_found"
+            params:
+              type: object
+              description: Динамические параметры для интерполяции сообщения
+              additionalProperties: true
+              example: { "orderId": "123" }
+
+    PaginationMeta:
+      type: object
+      description: Метаданные пагинации
+      required: [page, perPage, total, hasNext]
+      properties:
+        page:
+          type: integer
+          description: Текущая страница (1-indexed)
+          example: 1
+        perPage:
+          type: integer
+          description: Количество элементов на странице
+          example: 20
+        total:
+          type: integer
+          description: Общее количество элементов
+          example: 134
+        hasNext:
+          type: boolean
+          description: Есть ли следующая страница
+          example: true
+
+    PaginatedResponse:
+      type: object
+      description: Стандартный формат ответа с пагинацией
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: {}
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # ==================== OAUTH-READY ====================
+
+    ClientType:
+      type: string
+      description: Тип клиента для OAuth-ready структуры
+      enum: [mobile_client, courier_app, erp, partner, web]
+
+    ClientMetadata:
+      type: object
+      description: Метаданные клиента для OAuth-ready авторизации
+      properties:
+        clientId:
+          type: string
+          description: Уникальный идентификатор клиента
+        clientType:
+          $ref: '#/components/schemas/ClientType'
+        deviceId:
+          type: string
+          description: Идентификатор устройства
+        platform:
+          type: string
+          description: Платформа (ios, android, web)

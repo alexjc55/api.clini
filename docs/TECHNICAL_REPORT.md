@@ -357,6 +357,84 @@ Entities with `deletedAt`:
 
 ---
 
+## Request Tracking (X-Request-Id)
+
+All requests include `X-Request-Id` header:
+- **Inbound:** If client sends `X-Request-Id`, it's preserved
+- **Auto-generated:** If not provided, server generates UUID v4
+- **Response:** Always returned in response header
+- **Use case:** Logging, debugging, support tickets
+
+---
+
+## Idempotency
+
+POST endpoints support `Idempotency-Key` header:
+
+**Protected Endpoints:**
+- `POST /orders`
+- `POST /bonus/transactions`
+
+**Mechanism:**
+- Cache key: `userId + endpoint + idempotencyKey`
+- Response cached for 24 hours
+- Duplicate requests return cached response
+- Header `X-Idempotency-Replayed: true` indicates replay
+
+---
+
+## Pagination Contract
+
+**Standard format for all list endpoints:**
+```json
+{
+  "data": [...],
+  "meta": {
+    "page": 1,
+    "perPage": 20,
+    "total": 134,
+    "hasNext": true
+  }
+}
+```
+
+**Query Parameters:**
+- `page` (default: 1)
+- `perPage` (default: 20)
+
+**Paginated Endpoints:**
+- `GET /users` — User list (staff)
+- `GET /orders` — Order list
+- `GET /audit-logs` — Audit logs (staff)
+- `GET /events` — Analytics events (staff)
+- `GET /bonus/transactions/:userId` — Bonus transaction history
+
+*Note: Other list endpoints return unpaginated arrays for simplicity. Pagination can be extended as needed.*
+
+---
+
+## OAuth-Ready Structure
+
+**Client Types:**
+| Code | Description |
+|------|-------------|
+| `mobile_client` | Client mobile app |
+| `courier_app` | Courier mobile app |
+| `erp` | ERP system |
+| `partner` | Partner integration |
+| `web` | Web application |
+
+**Session Metadata:**
+- `clientId` — Client application identifier
+- `clientType` — Type of client application
+
+**Future Capabilities:**
+- Per-client rate limiting
+- API key issuance
+- Scope-based access control
+
+---
+
 ## API Versioning
 
 - Current: `/api/v1/*`
@@ -367,15 +445,18 @@ Entities with `deletedAt`:
 
 ## Error Responses
 
+**Immutable Error Contract:**
 ```json
 {
   "error": {
-    "code": "ERROR_CODE",
-    "messageKey": "errors.error_key",
-    "details": {}
+    "key": "order.not_found",
+    "params": { "orderId": "123" }
   }
 }
 ```
+
+- `key` — Localization key for client-side translation
+- `params` — Dynamic parameters for message interpolation
 
 **Standard HTTP Codes:**
 - `200` - Success

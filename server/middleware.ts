@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { randomUUID } from "crypto";
 import { verifyAccessToken, extractToken } from "./auth";
 import { storage } from "./storage";
 import type { User } from "@shared/schema";
@@ -10,11 +11,55 @@ declare global {
     interface Request {
       user?: User;
       userPermissions?: string[];
+      requestId: string;
     }
   }
 }
 
 export { i18nMiddleware };
+
+export function requestIdMiddleware(req: Request, res: Response, next: NextFunction) {
+  const requestId = (req.headers["x-request-id"] as string) || randomUUID();
+  req.requestId = requestId;
+  res.setHeader("X-Request-Id", requestId);
+  next();
+}
+
+const idempotencyCache = new Map<string, { statusCode: number; response: unknown; expiresAt: number }>();
+
+export function idempotencyMiddleware(endpoint: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const idempotencyKey = req.headers["idempotency-key"] as string;
+    
+    if (!idempotencyKey) {
+      return next();
+    }
+    
+    const userId = req.user?.id || "anonymous";
+    const cacheKey = `${userId}:${endpoint}:${idempotencyKey}`;
+    
+    const cached = idempotencyCache.get(cacheKey);
+    if (cached) {
+      if (Date.now() < cached.expiresAt) {
+        res.setHeader("X-Idempotency-Replayed", "true");
+        return res.status(cached.statusCode).json(cached.response);
+      }
+      idempotencyCache.delete(cacheKey);
+    }
+    
+    const originalJson = res.json.bind(res);
+    res.json = function(body: unknown) {
+      idempotencyCache.set(cacheKey, {
+        statusCode: res.statusCode,
+        response: body,
+        expiresAt: Date.now() + 24 * 60 * 60 * 1000
+      });
+      return originalJson(body);
+    };
+    
+    next();
+  };
+}
 
 export function sendError(res: Response, status: number, key: string, params?: Record<string, unknown>) {
   sendLocalizedError(res, status, key, params);

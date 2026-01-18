@@ -66,6 +66,9 @@ export const auditActions = [
 ] as const;
 export type AuditAction = (typeof auditActions)[number];
 
+export const clientTypes = ["mobile_client", "courier_app", "erp", "partner", "web"] as const;
+export type ClientType = (typeof clientTypes)[number];
+
 export interface Session {
   id: string;
   userId: string;
@@ -73,8 +76,32 @@ export interface Session {
   deviceId: string;
   platform: "ios" | "android" | "web";
   userAgent: string | null;
+  clientId: string | null;
+  clientType: ClientType | null;
   lastSeenAt: string;
   createdAt: string;
+}
+
+export interface IdempotencyRecord {
+  key: string;
+  userId: string;
+  endpoint: string;
+  statusCode: number;
+  response: unknown;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface PaginationMeta {
+  page: number;
+  perPage: number;
+  total: number;
+  hasNext: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
 }
 
 export const insertUserSchema = z.object({

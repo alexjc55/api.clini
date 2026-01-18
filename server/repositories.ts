@@ -91,7 +91,7 @@ export interface IAuditLogRepository {
 }
 
 export interface ISessionRepository {
-  createSession(userId: string, refreshToken: string, deviceId: string, platform: "ios" | "android" | "web", userAgent: string | null): Promise<Session>;
+  createSession(userId: string, refreshToken: string, deviceId: string, platform: "ios" | "android" | "web", userAgent: string | null, clientId?: string, clientType?: "mobile_client" | "courier_app" | "erp" | "partner" | "web"): Promise<Session>;
   getSession(refreshToken: string): Promise<Session | undefined>;
   getUserSessions(userId: string): Promise<Session[]>;
   updateSessionLastSeen(sessionId: string): Promise<void>;

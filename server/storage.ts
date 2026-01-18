@@ -472,7 +472,7 @@ export class MemStorage implements IStorage {
     return logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  async createSession(userId: string, refreshToken: string, deviceId: string, platform: "ios" | "android" | "web", userAgent: string | null): Promise<Session> {
+  async createSession(userId: string, refreshToken: string, deviceId: string, platform: "ios" | "android" | "web", userAgent: string | null, clientId?: string, clientType?: "mobile_client" | "courier_app" | "erp" | "partner" | "web"): Promise<Session> {
     const session: Session = {
       id: randomUUID(),
       userId,
@@ -480,6 +480,8 @@ export class MemStorage implements IStorage {
       deviceId,
       platform,
       userAgent,
+      clientId: clientId || null,
+      clientType: clientType || null,
       lastSeenAt: new Date().toISOString(),
       createdAt: new Date().toISOString()
     };
