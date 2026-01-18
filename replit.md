@@ -21,9 +21,17 @@ Backend API для сервиса выноса мусора / бытовых у�
 ## Технологии
 
 - Node.js + TypeScript
-- Express
-- JWT (access + refresh)
+- Express + express-rate-limit
+- JWT (access + refresh) с jsonwebtoken
+- bcryptjs для хеширования паролей
 - In-Memory Storage (для MVP)
+
+## Безопасность
+
+- Rate limiting на auth endpoints (10 запросов / 15 мин)
+- Revoke refresh tokens при блокировке пользователя
+- Валидация переходов статусов (state machine)
+- RBAC с гранулярными permissions
 
 ## Структура проекта
 
@@ -87,14 +95,21 @@ Backend API для сервиса выноса мусора / бытовых у�
 - `courier` — Курьер
 - `staff` — Персонал
 
-## Статусы заказа
+## Статусы заказа (State Machine)
 
-1. `created` — Создан
-2. `scheduled` — Запланирован
-3. `assigned` — Назначен курьер
-4. `in_progress` — В процессе
-5. `completed` — Завершён
-6. `cancelled` — Отменён
+```
+created → scheduled → assigned → in_progress → completed
+    ↓          ↓          ↓            ↓
+cancelled  cancelled  cancelled   cancelled
+```
+
+Разрешённые переходы:
+- `created` → `scheduled`, `assigned`, `cancelled`
+- `scheduled` → `assigned`, `cancelled`
+- `assigned` → `in_progress`, `cancelled`
+- `in_progress` → `completed`, `cancelled`
+- `completed` → (терминальный статус)
+- `cancelled` → (терминальный статус)
 
 ## Права доступа
 
