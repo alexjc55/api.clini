@@ -707,7 +707,8 @@ export async function registerRoutes(
     const logs = await storage.getAuditLogs({
       userId: userId as string,
       entity: entity as string,
-      entityId: entityId as string
+      entityId: entityId as string,
+      action: action as string
     });
     
     const pageNum = parseInt(page as string);

@@ -66,7 +66,7 @@ export interface IStorage {
   createOrderEvent(performedBy: string, event: InsertOrderEvent): Promise<OrderEvent>;
 
   createAuditLog(log: Omit<AuditLog, "id" | "createdAt">): Promise<AuditLog>;
-  getAuditLogs(filters?: { userId?: string; entity?: string; entityId?: string }): Promise<AuditLog[]>;
+  getAuditLogs(filters?: { userId?: string; entity?: string; entityId?: string; action?: string }): Promise<AuditLog[]>;
 
   createSession(userId: string, refreshToken: string, deviceId: string, platform: "ios" | "android" | "web", userAgent: string | null): Promise<Session>;
   getSession(refreshToken: string): Promise<Session | undefined>;
@@ -472,11 +472,12 @@ export class MemStorage implements IStorage {
     return auditLog;
   }
 
-  async getAuditLogs(filters?: { userId?: string; entity?: string; entityId?: string }): Promise<AuditLog[]> {
+  async getAuditLogs(filters?: { userId?: string; entity?: string; entityId?: string; action?: string }): Promise<AuditLog[]> {
     let logs = [...this.auditLogs];
     if (filters?.userId) logs = logs.filter(l => l.userId === filters.userId);
     if (filters?.entity) logs = logs.filter(l => l.entity === filters.entity);
     if (filters?.entityId) logs = logs.filter(l => l.entityId === filters.entityId);
+    if (filters?.action) logs = logs.filter(l => l.action === filters.action);
     return logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 

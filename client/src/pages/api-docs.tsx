@@ -147,7 +147,7 @@ const apiSections: ApiSection[] = [
     endpoints: [
       {
         method: "POST",
-        path: "/api/auth/register",
+        path: "/api/v1/auth/register",
         summary: { en: "Register new user", ru: "Регистрация нового пользователя" },
         description: { en: "Creates a new user (client, courier or staff)", ru: "Создает нового пользователя (client, courier или staff)" },
         auth: false,
@@ -165,11 +165,11 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "POST",
-        path: "/api/auth/login",
+        path: "/api/v1/auth/login",
         summary: { en: "User login", ru: "Авторизация пользователя" },
-        description: { en: "Returns JWT tokens on successful login", ru: "Возвращает JWT токены при успешной авторизации" },
+        description: { en: "Returns JWT tokens on successful login. Creates device session.", ru: "Возвращает JWT токены при успешной авторизации. Создаёт сессию устройства." },
         auth: false,
-        requestBody: { phone: "+79991234567", password: "securePassword123" },
+        requestBody: { phone: "+79991234567", password: "securePassword123", deviceId: "device-123", platform: "ios | android | web" },
         responseExample: {
           status: "success",
           message: { key: "auth.login_success", params: { userId: "uuid" } },
@@ -178,16 +178,16 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "POST",
-        path: "/api/auth/refresh",
+        path: "/api/v1/auth/refresh",
         summary: { en: "Refresh token", ru: "Обновление токена" },
-        description: { en: "Refreshes access token using refresh token", ru: "Обновляет access token используя refresh token" },
+        description: { en: "Refreshes access token using refresh token. Updates lastSeenAt.", ru: "Обновляет access token используя refresh token. Обновляет lastSeenAt." },
         auth: false,
         requestBody: { refreshToken: "eyJhbGciOiJIUzI1NiIs..." },
         responseExample: { accessToken: "eyJhbGciOiJIUzI1NiIs...", refreshToken: "eyJhbGciOiJIUzI1NiIs..." }
       },
       {
         method: "GET",
-        path: "/api/auth/me",
+        path: "/api/v1/auth/me",
         summary: { en: "Current user", ru: "Текущий пользователь" },
         description: { en: "Returns info about current authenticated user", ru: "Возвращает информацию о текущем авторизованном пользователе" },
         auth: true,
@@ -195,7 +195,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "GET",
-        path: "/api/auth/sessions",
+        path: "/api/v1/auth/sessions",
         summary: { en: "My active sessions", ru: "Мои активные сессии" },
         description: { en: "List of all active sessions with device info", ru: "Список всех активных сессий пользователя с информацией об устройствах" },
         auth: true,
@@ -203,14 +203,14 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "DELETE",
-        path: "/api/auth/sessions/:id",
+        path: "/api/v1/auth/sessions/:id",
         summary: { en: "Logout from device", ru: "Выход с устройства" },
         description: { en: "Deletes session (logout from specific device)", ru: "Удаляет сессию (выход с конкретного устройства)" },
         auth: true
       },
       {
         method: "POST",
-        path: "/api/auth/logout-all",
+        path: "/api/v1/auth/logout-all",
         summary: { en: "Logout from all devices", ru: "Выход со всех устройств" },
         description: { en: "Deletes all sessions and revokes all tokens", ru: "Удаляет все сессии и отзывает все токены пользователя" },
         auth: true,
@@ -234,7 +234,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "GET",
-        path: "/api/users/:id",
+        path: "/api/v1/users/:id",
         summary: { en: "User details", ru: "Информация о пользователе" },
         description: { en: "Get detailed user information", ru: "Получение детальной информации о пользователе" },
         auth: true,
@@ -243,7 +243,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "PATCH",
-        path: "/api/users/:id",
+        path: "/api/v1/users/:id",
         summary: { en: "Update user", ru: "Обновление пользователя" },
         description: { en: "Update user data", ru: "Обновление данных пользователя" },
         auth: true,
@@ -252,7 +252,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "POST",
-        path: "/api/users/:id/roles",
+        path: "/api/v1/users/:id/roles",
         summary: { en: "Assign roles", ru: "Назначение ролей" },
         description: { en: "Assign roles to user", ru: "Назначение ролей пользователю" },
         auth: true,
@@ -261,7 +261,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "DELETE",
-        path: "/api/users/:id",
+        path: "/api/v1/users/:id",
         summary: { en: "Soft delete user", ru: "Soft delete пользователя" },
         description: { en: "Soft delete user (sets deletedAt). Use ?includeDeleted=true to view deleted", ru: "Мягкое удаление пользователя (устанавливает deletedAt). Используйте ?includeDeleted=true для просмотра удалённых" },
         auth: true,
@@ -277,7 +277,7 @@ const apiSections: ApiSection[] = [
     endpoints: [
       {
         method: "GET",
-        path: "/api/addresses",
+        path: "/api/v1/addresses",
         summary: { en: "My addresses", ru: "Мои адреса" },
         description: { en: "Get list of current user addresses", ru: "Получение списка адресов текущего пользователя" },
         auth: true,
@@ -285,7 +285,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "POST",
-        path: "/api/addresses",
+        path: "/api/v1/addresses",
         summary: { en: "Add address", ru: "Добавление адреса" },
         description: { en: "Add new address", ru: "Добавление нового адреса" },
         auth: true,
@@ -293,7 +293,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "PATCH",
-        path: "/api/addresses/:id",
+        path: "/api/v1/addresses/:id",
         summary: { en: "Update address", ru: "Обновление адреса" },
         description: { en: "Update existing address", ru: "Обновление существующего адреса" },
         auth: true,
@@ -301,7 +301,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "DELETE",
-        path: "/api/addresses/:id",
+        path: "/api/v1/addresses/:id",
         summary: { en: "Delete address", ru: "Удаление адреса" },
         description: { en: "Delete address", ru: "Удаление адреса" },
         auth: true
@@ -315,7 +315,7 @@ const apiSections: ApiSection[] = [
     endpoints: [
       {
         method: "POST",
-        path: "/api/orders",
+        path: "/api/v1/orders",
         summary: { en: "Create order", ru: "Создание заказа" },
         description: { en: "Create new order by client", ru: "Создание нового заказа клиентом" },
         auth: true,
@@ -333,7 +333,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "GET",
-        path: "/api/orders/:id",
+        path: "/api/v1/orders/:id",
         summary: { en: "Order details", ru: "Детали заказа" },
         description: { en: "Get full order information", ru: "Получение полной информации о заказе" },
         auth: true,
@@ -341,7 +341,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "PATCH",
-        path: "/api/orders/:id",
+        path: "/api/v1/orders/:id",
         summary: { en: "Update order", ru: "Обновление заказа" },
         description: { en: "Update status, courier or order data", ru: "Обновление статуса, курьера или данных заказа" },
         auth: true,
@@ -350,7 +350,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "POST",
-        path: "/api/orders/:id/assign",
+        path: "/api/v1/orders/:id/assign",
         summary: { en: "Assign courier", ru: "Назначение курьера" },
         description: { en: "Assign courier to order (ERP)", ru: "Назначение курьера на заказ (ERP)" },
         auth: true,
@@ -382,7 +382,7 @@ const apiSections: ApiSection[] = [
     endpoints: [
       {
         method: "GET",
-        path: "/api/courier/profile",
+        path: "/api/v1/courier/profile",
         summary: { en: "Courier profile", ru: "Профиль курьера" },
         description: { en: "Get current courier profile", ru: "Получение профиля текущего курьера" },
         auth: true,
@@ -390,7 +390,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "PATCH",
-        path: "/api/courier/profile",
+        path: "/api/v1/courier/profile",
         summary: { en: "Update status", ru: "Обновление статуса" },
         description: { en: "Change courier availability status", ru: "Изменение статуса доступности курьера" },
         auth: true,
@@ -398,7 +398,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "GET",
-        path: "/api/courier/orders",
+        path: "/api/v1/courier/orders",
         summary: { en: "Courier orders", ru: "Заказы курьера" },
         description: { en: "Get list of assigned orders", ru: "Получение списка назначенных заказов" },
         auth: true,
@@ -406,14 +406,14 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "POST",
-        path: "/api/courier/orders/:id/accept",
+        path: "/api/v1/courier/orders/:id/accept",
         summary: { en: "Accept order", ru: "Принять заказ" },
         description: { en: "Accept assigned order by courier", ru: "Принятие назначенного заказа курьером" },
         auth: true
       },
       {
         method: "POST",
-        path: "/api/courier/orders/:id/complete",
+        path: "/api/v1/courier/orders/:id/complete",
         summary: { en: "Complete order", ru: "Завершить заказ" },
         description: { en: "Mark order as completed", ru: "Отметка заказа как выполненного" },
         auth: true
@@ -427,7 +427,7 @@ const apiSections: ApiSection[] = [
     endpoints: [
       {
         method: "GET",
-        path: "/api/roles",
+        path: "/api/v1/roles",
         summary: { en: "List roles", ru: "Список ролей" },
         description: { en: "Get list of all roles", ru: "Получение списка всех ролей" },
         auth: true,
@@ -436,7 +436,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "POST",
-        path: "/api/roles",
+        path: "/api/v1/roles",
         summary: { en: "Create role", ru: "Создание роли" },
         description: { en: "Create new role with permissions", ru: "Создание новой роли с набором прав" },
         auth: true,
@@ -445,7 +445,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "GET",
-        path: "/api/permissions",
+        path: "/api/v1/permissions",
         summary: { en: "List permissions", ru: "Список прав" },
         description: { en: "Get list of all available permissions", ru: "Получение списка всех доступных прав" },
         auth: true,
@@ -463,7 +463,7 @@ const apiSections: ApiSection[] = [
       },
       {
         method: "PATCH",
-        path: "/api/couriers/:id/verify",
+        path: "/api/v1/couriers/:id/verify",
         summary: { en: "Verify courier", ru: "Верификация курьера" },
         description: { en: "Change courier verification status (verified/rejected)", ru: "Изменение статуса верификации курьера (verified/rejected)" },
         auth: true,
