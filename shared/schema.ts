@@ -42,6 +42,38 @@ export interface User {
   passwordHash: string;
   status: UserStatus;
   createdAt: string;
+  deletedAt: string | null;
+}
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  userRole: string;
+  action: string;
+  entity: string;
+  entityId: string;
+  changes: Record<string, { from: unknown; to: unknown }>;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export const auditActions = [
+  "CREATE_USER", "UPDATE_USER", "DELETE_USER", "BLOCK_USER",
+  "CREATE_ORDER", "UPDATE_ORDER", "ASSIGN_COURIER", "CANCEL_ORDER",
+  "CREATE_ROLE", "UPDATE_ROLE", "ASSIGN_ROLE",
+  "VERIFY_COURIER"
+] as const;
+export type AuditAction = (typeof auditActions)[number];
+
+export interface Session {
+  id: string;
+  userId: string;
+  refreshToken: string;
+  deviceId: string;
+  platform: "ios" | "android" | "web";
+  userAgent: string | null;
+  lastSeenAt: string;
+  createdAt: string;
 }
 
 export const insertUserSchema = z.object({

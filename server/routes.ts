@@ -50,6 +50,7 @@ export async function registerRoutes(
   app.post("/api/auth/login", authRateLimiter, async (req, res) => {
     try {
       const data = loginSchema.parse(req.body);
+      const { deviceId, platform } = req.body;
       
       const user = await storage.verifyUserPassword(data.phone, data.password);
       if (!user) {
@@ -60,7 +61,23 @@ export async function registerRoutes(
         return sendError(res, 403, "FORBIDDEN", "User account is blocked");
       }
       
+      if (user.deletedAt) {
+        return sendError(res, 401, "UNAUTHORIZED", "User account has been deleted");
+      }
+      
       const tokens = generateTokens(user.id);
+      
+      if (deviceId) {
+        const userAgent = req.headers["user-agent"] || null;
+        await storage.createSession(
+          user.id,
+          tokens.refreshToken,
+          deviceId,
+          platform || "web",
+          userAgent
+        );
+      }
+      
       res.json(tokens);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -95,10 +112,11 @@ export async function registerRoutes(
   });
 
   app.get("/api/users", authMiddleware, requirePermissions("users.read"), async (req, res) => {
-    const { type, status, page = "1", limit = "20" } = req.query;
+    const { type, status, includeDeleted, page = "1", limit = "20" } = req.query;
     const users = await storage.getUsers({
       type: type as any,
-      status: status as any
+      status: status as any,
+      includeDeleted: includeDeleted === "true"
     });
     
     const pageNum = parseInt(page as string);
@@ -138,6 +156,37 @@ export async function registerRoutes(
     
     if (req.body.status === "blocked" && existingUser.status !== "blocked") {
       revokeUserTokens(user.id);
+      await storage.deleteUserSessions(user.id);
+      
+      const userRoles = await storage.getUserRoles(req.user!.id);
+      await storage.createAuditLog({
+        userId: req.user!.id,
+        userRole: userRoles.map(r => r.name).join(","),
+        action: "BLOCK_USER",
+        entity: "user",
+        entityId: req.params.id,
+        changes: { status: { from: existingUser.status, to: "blocked" } },
+        metadata: {}
+      });
+    } else if (Object.keys(req.body).length > 0) {
+      const userRoles = await storage.getUserRoles(req.user!.id);
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      for (const key of Object.keys(req.body)) {
+        if ((existingUser as any)[key] !== req.body[key]) {
+          changes[key] = { from: (existingUser as any)[key], to: req.body[key] };
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        await storage.createAuditLog({
+          userId: req.user!.id,
+          userRole: userRoles.map(r => r.name).join(","),
+          action: "UPDATE_USER",
+          entity: "user",
+          entityId: req.params.id,
+          changes,
+          metadata: {}
+        });
+      }
     }
     
     const { passwordHash, ...userData } = user;
@@ -155,8 +204,50 @@ export async function registerRoutes(
       return sendError(res, 404, "NOT_FOUND", "User not found");
     }
     
+    const oldRoles = await storage.getUserRoles(req.params.id);
     await storage.setUserRoles(req.params.id, roleIds);
+    const newRoles = await storage.getUserRoles(req.params.id);
+    
+    const userRoles = await storage.getUserRoles(req.user!.id);
+    await storage.createAuditLog({
+      userId: req.user!.id,
+      userRole: userRoles.map(r => r.name).join(","),
+      action: "ASSIGN_ROLE",
+      entity: "user",
+      entityId: req.params.id,
+      changes: { roles: { from: oldRoles.map(r => r.name), to: newRoles.map(r => r.name) } },
+      metadata: {}
+    });
+    
     res.json({ success: true });
+  });
+
+  app.delete("/api/users/:id", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const user = await storage.getUser(req.params.id);
+    if (!user) {
+      return sendError(res, 404, "NOT_FOUND", "User not found");
+    }
+    
+    if (user.deletedAt) {
+      return sendError(res, 409, "CONFLICT", "User already deleted");
+    }
+    
+    const deleted = await storage.softDeleteUser(req.params.id);
+    revokeUserTokens(req.params.id);
+    await storage.deleteUserSessions(req.params.id);
+    
+    const userRoles = await storage.getUserRoles(req.user!.id);
+    await storage.createAuditLog({
+      userId: req.user!.id,
+      userRole: userRoles.map(r => r.name).join(","),
+      action: "DELETE_USER",
+      entity: "user",
+      entityId: req.params.id,
+      changes: { deletedAt: { from: null, to: deleted?.deletedAt } },
+      metadata: {}
+    });
+    
+    res.status(204).send();
   });
 
   app.get("/api/addresses", authMiddleware, async (req, res) => {
@@ -510,8 +601,71 @@ export async function registerRoutes(
       return sendError(res, 404, "NOT_FOUND", "Courier profile not found");
     }
     
+    const oldStatus = profile.verificationStatus;
     const updated = await storage.updateCourierProfile(req.params.id, { verificationStatus: status } as any);
+    
+    const userRoles = await storage.getUserRoles(req.user!.id);
+    await storage.createAuditLog({
+      userId: req.user!.id,
+      userRole: userRoles.map(r => r.name).join(","),
+      action: "VERIFY_COURIER",
+      entity: "courier",
+      entityId: req.params.id,
+      changes: { verificationStatus: { from: oldStatus, to: status } },
+      metadata: {}
+    });
+    
     res.json(updated);
+  });
+
+  app.get("/api/audit-logs", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const { userId, entity, entityId, page = "1", limit = "50" } = req.query;
+    const logs = await storage.getAuditLogs({
+      userId: userId as string,
+      entity: entity as string,
+      entityId: entityId as string
+    });
+    
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const start = (pageNum - 1) * limitNum;
+    const paginatedLogs = logs.slice(start, start + limitNum);
+    
+    res.json({
+      logs: paginatedLogs,
+      total: logs.length,
+      page: pageNum,
+      limit: limitNum
+    });
+  });
+
+  app.get("/api/auth/sessions", authMiddleware, async (req, res) => {
+    const sessions = await storage.getUserSessions(req.user!.id);
+    res.json(sessions.map(s => ({
+      id: s.id,
+      deviceId: s.deviceId,
+      platform: s.platform,
+      lastSeenAt: s.lastSeenAt,
+      createdAt: s.createdAt
+    })));
+  });
+
+  app.delete("/api/auth/sessions/:id", authMiddleware, async (req, res) => {
+    const sessions = await storage.getUserSessions(req.user!.id);
+    const session = sessions.find(s => s.id === req.params.id);
+    
+    if (!session) {
+      return sendError(res, 404, "NOT_FOUND", "Session not found");
+    }
+    
+    await storage.deleteSession(req.params.id);
+    res.status(204).send();
+  });
+
+  app.post("/api/auth/logout-all", authMiddleware, async (req, res) => {
+    await storage.deleteUserSessions(req.user!.id);
+    revokeUserTokens(req.user!.id);
+    res.json({ success: true });
   });
 
   return httpServer;

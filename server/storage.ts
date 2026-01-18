@@ -4,7 +4,7 @@ import type {
   User, InsertUser, Role, InsertRole, Permission, InsertPermission,
   Address, InsertAddress, CourierProfile, UpdateCourierProfile,
   Order, InsertOrder, UpdateOrder, OrderEvent, InsertOrderEvent,
-  UserType, UserStatus, OrderStatus
+  UserType, UserStatus, OrderStatus, AuditLog, Session
 } from "@shared/schema";
 
 async function hashPassword(password: string): Promise<string> {
@@ -17,10 +17,11 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByPhone(phone: string): Promise<User | undefined>;
+  getUserByPhone(phone: string, includeDeleted?: boolean): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
-  getUsers(filters?: { type?: UserType; status?: UserStatus }): Promise<User[]>;
+  softDeleteUser(id: string): Promise<User | undefined>;
+  getUsers(filters?: { type?: UserType; status?: UserStatus; includeDeleted?: boolean }): Promise<User[]>;
   verifyUserPassword(phone: string, password: string): Promise<User | undefined>;
 
   getRole(id: string): Promise<Role | undefined>;
@@ -60,6 +61,16 @@ export interface IStorage {
   getOrderEvents(orderId: string): Promise<OrderEvent[]>;
   createOrderEvent(performedBy: string, event: InsertOrderEvent): Promise<OrderEvent>;
 
+  createAuditLog(log: Omit<AuditLog, "id" | "createdAt">): Promise<AuditLog>;
+  getAuditLogs(filters?: { userId?: string; entity?: string; entityId?: string }): Promise<AuditLog[]>;
+
+  createSession(userId: string, refreshToken: string, deviceId: string, platform: "ios" | "android" | "web", userAgent: string | null): Promise<Session>;
+  getSession(refreshToken: string): Promise<Session | undefined>;
+  getUserSessions(userId: string): Promise<Session[]>;
+  updateSessionLastSeen(sessionId: string): Promise<void>;
+  deleteSession(sessionId: string): Promise<boolean>;
+  deleteUserSessions(userId: string): Promise<void>;
+
   initDefaults(): Promise<void>;
 }
 
@@ -73,13 +84,17 @@ export class MemStorage implements IStorage {
   private courierProfiles: Map<string, CourierProfile> = new Map();
   private orders: Map<string, Order> = new Map();
   private orderEvents: Map<string, OrderEvent[]> = new Map();
+  private auditLogs: AuditLog[] = [];
+  private sessions: Map<string, Session> = new Map();
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }
 
-  async getUserByPhone(phone: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(u => u.phone === phone);
+  async getUserByPhone(phone: string, includeDeleted = false): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(u => 
+      u.phone === phone && (includeDeleted || !u.deletedAt)
+    );
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
@@ -91,7 +106,8 @@ export class MemStorage implements IStorage {
       email: insertUser.email || null,
       passwordHash: await hashPassword(insertUser.password),
       status: "active",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      deletedAt: null
     };
     this.users.set(id, user);
 
@@ -117,8 +133,19 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  async getUsers(filters?: { type?: UserType; status?: UserStatus }): Promise<User[]> {
+  async softDeleteUser(id: string): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    user.deletedAt = new Date().toISOString();
+    this.users.set(id, user);
+    return user;
+  }
+
+  async getUsers(filters?: { type?: UserType; status?: UserStatus; includeDeleted?: boolean }): Promise<User[]> {
     let users = Array.from(this.users.values());
+    if (!filters?.includeDeleted) {
+      users = users.filter(u => !u.deletedAt);
+    }
     if (filters?.type) users = users.filter(u => u.type === filters.type);
     if (filters?.status) users = users.filter(u => u.status === filters.status);
     return users;
@@ -386,6 +413,67 @@ export class MemStorage implements IStorage {
     this.orderEvents.get(event.orderId)!.push(newEvent);
     
     return newEvent;
+  }
+
+  async createAuditLog(log: Omit<AuditLog, "id" | "createdAt">): Promise<AuditLog> {
+    const auditLog: AuditLog = {
+      id: randomUUID(),
+      ...log,
+      createdAt: new Date().toISOString()
+    };
+    this.auditLogs.push(auditLog);
+    return auditLog;
+  }
+
+  async getAuditLogs(filters?: { userId?: string; entity?: string; entityId?: string }): Promise<AuditLog[]> {
+    let logs = [...this.auditLogs];
+    if (filters?.userId) logs = logs.filter(l => l.userId === filters.userId);
+    if (filters?.entity) logs = logs.filter(l => l.entity === filters.entity);
+    if (filters?.entityId) logs = logs.filter(l => l.entityId === filters.entityId);
+    return logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async createSession(userId: string, refreshToken: string, deviceId: string, platform: "ios" | "android" | "web", userAgent: string | null): Promise<Session> {
+    const session: Session = {
+      id: randomUUID(),
+      userId,
+      refreshToken,
+      deviceId,
+      platform,
+      userAgent,
+      lastSeenAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+    this.sessions.set(session.id, session);
+    return session;
+  }
+
+  async getSession(refreshToken: string): Promise<Session | undefined> {
+    return Array.from(this.sessions.values()).find(s => s.refreshToken === refreshToken);
+  }
+
+  async getUserSessions(userId: string): Promise<Session[]> {
+    return Array.from(this.sessions.values()).filter(s => s.userId === userId);
+  }
+
+  async updateSessionLastSeen(sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.lastSeenAt = new Date().toISOString();
+      this.sessions.set(sessionId, session);
+    }
+  }
+
+  async deleteSession(sessionId: string): Promise<boolean> {
+    return this.sessions.delete(sessionId);
+  }
+
+  async deleteUserSessions(userId: string): Promise<void> {
+    for (const [id, session] of this.sessions.entries()) {
+      if (session.userId === userId) {
+        this.sessions.delete(id);
+      }
+    }
   }
 
   async initDefaults(): Promise<void> {
