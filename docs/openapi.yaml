@@ -15,6 +15,7 @@ info:
     - **Webhooks**: Real-time уведомления для партнёров с HMAC-SHA256 подписью
     - **Feature Flags**: Глобальные флаги для постепенного раскатывания функций
     - **Sandbox Mode**: Изолированное тестовое окружение через `X-Environment: sandbox`
+    - **Meta Caching**: Все `/meta/*` endpoints кэшируются (Cache-Control: max-age=300, ETag)
     
     ## Аутентификация
     Все защищённые endpoints требуют заголовок:
@@ -130,9 +131,25 @@ paths:
     get:
       tags: [system]
       summary: Список статусов заказа
+      description: |
+        Возвращает список доступных статусов заказа.
+        
+        **Кэширование:**
+        - `Cache-Control: public, max-age=300` (5 минут)
+        - `ETag` для условных запросов
+        - Используйте `If-None-Match` для эффективного polling
       responses:
         '200':
           description: Список статусов
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: "public, max-age=300"
+            ETag:
+              schema:
+                type: string
+                example: '"bfb1df39efda0db5bf85df84b4bc71a1"'
           content:
             application/json:
               schema:
@@ -143,6 +160,8 @@ paths:
                     code:
                       type: string
                       enum: [created, scheduled, assigned, in_progress, completed, cancelled]
+        '304':
+          description: Not Modified (при совпадении ETag)
 
   /meta/user-types:
     get:

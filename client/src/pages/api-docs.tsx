@@ -141,6 +141,14 @@ const t = {
       "Send X-Environment: sandbox header",
       "Only orders, subscriptions, bonuses can be created",
       "Other writes blocked with sandbox.write_not_allowed error"
+    ],
+    metaCachingTitle: "Meta Endpoint Caching",
+    metaCachingDesc: "All /meta/* endpoints support HTTP caching for efficiency",
+    metaCachingPoints: [
+      "Cache-Control: public, max-age=300 (5 minutes)",
+      "ETag header for conditional requests",
+      "Use If-None-Match for 304 Not Modified",
+      "Reduces polling overhead for enum discovery"
     ]
   },
   ru: {
@@ -253,6 +261,14 @@ const t = {
       "Отправьте заголовок X-Environment: sandbox",
       "Только заказы, подписки, бонусы могут быть созданы",
       "Другие записи блокируются с ошибкой sandbox.write_not_allowed"
+    ],
+    metaCachingTitle: "Кэширование Meta Endpoints",
+    metaCachingDesc: "Все /meta/* endpoints поддерживают HTTP-кэширование для эффективности",
+    metaCachingPoints: [
+      "Cache-Control: public, max-age=300 (5 минут)",
+      "ETag заголовок для условных запросов",
+      "Используйте If-None-Match для 304 Not Modified",
+      "Снижает нагрузку при polling для обнаружения enum"
     ]
   }
 };
@@ -1783,6 +1799,29 @@ export default function ApiDocs() {
   "mode": "sandbox",
   "isSandbox": true
 }`}
+              </pre>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">{tr.metaCachingTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{tr.metaCachingDesc}</p>
+              <ul className="list-disc list-inside space-y-1 ml-2 text-sm text-muted-foreground">
+                {tr.metaCachingPoints.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+{`# Первый запрос
+GET /meta/order-statuses
+→ Cache-Control: public, max-age=300
+→ ETag: "abc123..."
+
+# Последующие запросы с If-None-Match
+GET /meta/order-statuses
+If-None-Match: "abc123..."
+→ 304 Not Modified`}
               </pre>
             </CardContent>
           </Card>
