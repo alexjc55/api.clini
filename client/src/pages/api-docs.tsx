@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight, Send, Copy, Check, Key, Server, Shield, Users, Package, MapPin, Truck, Globe, Download } from "lucide-react";
+import { ChevronDown, ChevronRight, Send, Copy, Check, Key, Server, Shield, Users, Package, MapPin, Truck, Globe, Download, Activity, Flag, Gift, CalendarClock, Store, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Lang = "en" | "ru";
@@ -20,7 +20,7 @@ interface EndpointDef {
   auth: boolean;
   permissions?: string[];
   requestBody?: Record<string, unknown>;
-  responseExample?: Record<string, unknown>;
+  responseExample?: Record<string, unknown> | unknown[];
 }
 
 interface ApiSection {
@@ -246,6 +246,81 @@ const apiSections: ApiSection[] = [
           { code: "courier_changed" },
           { code: "price_changed" },
           { code: "note_added" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/event-types",
+        summary: { en: "Product event types (v2)", ru: "Типы продуктовых событий (v2)" },
+        description: { en: "Returns all product analytics event types", ru: "Возвращает все типы продуктовых событий для аналитики" },
+        auth: false,
+        responseExample: [
+          { code: "order.created" },
+          { code: "order.completed" },
+          { code: "subscription.started" },
+          { code: "bonus.earned" },
+          { code: "bonus.redeemed" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/activity-types",
+        summary: { en: "User activity types (v2)", ru: "Типы активности пользователей (v2)" },
+        description: { en: "Returns user activity event types", ru: "Возвращает типы событий активности пользователей" },
+        auth: false,
+        responseExample: [
+          { code: "session_start" },
+          { code: "order_placed" },
+          { code: "app_opened" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/user-flag-keys",
+        summary: { en: "User flag keys (v2)", ru: "Ключи флагов пользователей (v2)" },
+        description: { en: "Returns available user segmentation flag keys", ru: "Возвращает доступные ключи флагов для сегментации" },
+        auth: false,
+        responseExample: [
+          { code: "vip" },
+          { code: "churn_risk" },
+          { code: "high_ltv" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/bonus-transaction-types",
+        summary: { en: "Bonus transaction types (v2)", ru: "Типы бонусных транзакций (v2)" },
+        description: { en: "Returns bonus transaction types", ru: "Возвращает типы бонусных транзакций" },
+        auth: false,
+        responseExample: [
+          { code: "earn" },
+          { code: "spend" },
+          { code: "expire" },
+          { code: "adjust" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/subscription-statuses",
+        summary: { en: "Subscription statuses (v2)", ru: "Статусы подписок (v2)" },
+        description: { en: "Returns subscription status options", ru: "Возвращает варианты статусов подписок" },
+        auth: false,
+        responseExample: [
+          { code: "active" },
+          { code: "paused" },
+          { code: "cancelled" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/partner-categories",
+        summary: { en: "Partner categories (v2)", ru: "Категории партнёров (v2)" },
+        description: { en: "Returns partner category options", ru: "Возвращает варианты категорий партнёров" },
+        auth: false,
+        responseExample: [
+          { code: "cleaning" },
+          { code: "laundry" },
+          { code: "repair" }
         ]
       }
     ]
@@ -589,6 +664,270 @@ const apiSections: ApiSection[] = [
         auth: true,
         permissions: ["users.manage"],
         responseExample: { logs: [{ id: "log-uuid", userId: "staff-uuid", userRole: "admin", action: "VERIFY_COURIER", messageKey: "audit.courier.verified", entity: "courier", entityId: "courier-uuid", changes: { verificationStatus: { from: "pending", to: "verified" } }, metadata: { courierId: "courier-uuid" }, createdAt: "2026-01-15T10:30:00Z" }], total: 100, page: 1, limit: 50 }
+      }
+    ]
+  },
+  {
+    name: { en: "Events & Activity (v2)", ru: "События и активность (v2)" },
+    icon: Activity,
+    description: { en: "Product analytics events and user activity tracking", ru: "Продуктовые события и отслеживание активности пользователей" },
+    endpoints: [
+      {
+        method: "POST",
+        path: "/api/v1/events",
+        summary: { en: "Create event", ru: "Создать событие" },
+        description: { en: "Send product analytics event", ru: "Отправить продуктовое событие для аналитики" },
+        auth: true,
+        requestBody: { type: "order.created", actorType: "user", actorId: "user-uuid", entityType: "order", entityId: "order-uuid", metadata: { source: "mobile" } },
+        responseExample: { status: "success", data: { id: "event-uuid", type: "order.created", actorType: "user", actorId: "user-uuid", createdAt: "2026-01-18T10:30:00Z" } }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/events",
+        summary: { en: "List events", ru: "Список событий" },
+        description: { en: "Get events with filters: ?type, ?actorType, ?actorId, ?entityType, ?entityId, ?from, ?to", ru: "Получение событий с фильтрами: ?type, ?actorType, ?actorId, ?entityType, ?entityId, ?from, ?to" },
+        auth: true,
+        permissions: ["reports.read"],
+        responseExample: [{ id: "event-uuid", type: "order.created", actorType: "user", actorId: "user-uuid", entityType: "order", entityId: "order-uuid", metadata: {}, createdAt: "2026-01-18T10:30:00Z" }]
+      },
+      {
+        method: "POST",
+        path: "/api/v1/users/:id/activity",
+        summary: { en: "Record activity", ru: "Записать активность" },
+        description: { en: "Record user activity event", ru: "Записать событие активности пользователя" },
+        auth: true,
+        requestBody: { eventType: "app_opened", metadata: { screen: "home" } },
+        responseExample: { status: "success", data: { id: "activity-uuid", userId: "user-uuid", eventType: "app_opened", metadata: { screen: "home" }, createdAt: "2026-01-18T10:30:00Z" } }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/activity",
+        summary: { en: "Get user activity", ru: "Получить активность" },
+        description: { en: "Get user activity history with filters: ?eventType, ?from, ?to", ru: "Получение истории активности пользователя с фильтрами: ?eventType, ?from, ?to" },
+        auth: true,
+        responseExample: [{ id: "activity-uuid", userId: "user-uuid", eventType: "order_placed", metadata: { orderId: "order-uuid" }, createdAt: "2026-01-18T10:30:00Z" }]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/activity/summary",
+        summary: { en: "Activity summary", ru: "Сводка активности" },
+        description: { en: "Get user activity summary with aggregated stats", ru: "Получение сводки активности пользователя с агрегированной статистикой" },
+        auth: true,
+        responseExample: { userId: "user-uuid", lastOrderAt: "2026-01-18T10:30:00Z", totalOrders: 15, totalSpent: 1500 }
+      }
+    ]
+  },
+  {
+    name: { en: "User Flags (v2)", ru: "Флаги пользователей (v2)" },
+    icon: Flag,
+    description: { en: "User segmentation and feature flags", ru: "Сегментация пользователей и флаги функций" },
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/users/:id/flags",
+        summary: { en: "Get user flags", ru: "Получить флаги пользователя" },
+        description: { en: "Get all flags for a user", ru: "Получение всех флагов пользователя" },
+        auth: true,
+        permissions: ["users.read"],
+        responseExample: [{ id: "flag-uuid", userId: "user-uuid", key: "vip", value: true, source: "manual", createdAt: "2026-01-18T10:30:00Z" }]
+      },
+      {
+        method: "POST",
+        path: "/api/v1/users/:id/flags",
+        summary: { en: "Set user flag", ru: "Установить флаг" },
+        description: { en: "Set or update a user flag", ru: "Установить или обновить флаг пользователя" },
+        auth: true,
+        permissions: ["users.manage"],
+        requestBody: { key: "vip", value: true, source: "manual" },
+        responseExample: { status: "success", data: { id: "flag-uuid", userId: "user-uuid", key: "vip", value: true, source: "manual", createdAt: "2026-01-18T10:30:00Z" } }
+      },
+      {
+        method: "DELETE",
+        path: "/api/v1/users/:id/flags/:key",
+        summary: { en: "Delete flag", ru: "Удалить флаг" },
+        description: { en: "Delete a user flag by key", ru: "Удаление флага пользователя по ключу" },
+        auth: true,
+        permissions: ["users.manage"]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/flags/:key/users",
+        summary: { en: "Users by flag", ru: "Пользователи по флагу" },
+        description: { en: "Get list of user IDs with specific flag. Filter: ?value", ru: "Получение списка ID пользователей с определённым флагом. Фильтр: ?value" },
+        auth: true,
+        permissions: ["users.read"],
+        responseExample: ["user-uuid-1", "user-uuid-2", "user-uuid-3"]
+      }
+    ]
+  },
+  {
+    name: { en: "Bonus System (v2)", ru: "Бонусная система (v2)" },
+    icon: Gift,
+    description: { en: "Bonus accounts and transactions", ru: "Бонусные счета и транзакции" },
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/bonus/accounts/:userId",
+        summary: { en: "Get bonus account", ru: "Получить бонусный счёт" },
+        description: { en: "Get user's bonus account balance", ru: "Получение баланса бонусного счёта пользователя" },
+        auth: true,
+        responseExample: { userId: "user-uuid", balance: 500, updatedAt: "2026-01-18T10:30:00Z" }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/bonus/transactions",
+        summary: { en: "Create transaction", ru: "Создать транзакцию" },
+        description: { en: "Create bonus transaction (earn/spend/expire/adjust)", ru: "Создание бонусной транзакции (earn/spend/expire/adjust)" },
+        auth: true,
+        permissions: ["payments.read"],
+        requestBody: { userId: "user-uuid", type: "earn", amount: 100, reason: "order_completion", referenceType: "order", referenceId: "order-uuid" },
+        responseExample: { status: "success", data: { id: "tx-uuid", userId: "user-uuid", type: "earn", amount: 100, reason: "order_completion", referenceType: "order", referenceId: "order-uuid", createdAt: "2026-01-18T10:30:00Z" } }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/bonus/transactions/:userId",
+        summary: { en: "Get transactions", ru: "Получить транзакции" },
+        description: { en: "Get user's bonus transaction history. Filters: ?type, ?from, ?to", ru: "Получение истории бонусных транзакций пользователя. Фильтры: ?type, ?from, ?to" },
+        auth: true,
+        responseExample: [{ id: "tx-uuid", userId: "user-uuid", type: "earn", amount: 100, reason: "order_completion", referenceType: "order", referenceId: "order-uuid", createdAt: "2026-01-18T10:30:00Z" }]
+      }
+    ]
+  },
+  {
+    name: { en: "Subscriptions (v2)", ru: "Подписки (v2)" },
+    icon: CalendarClock,
+    description: { en: "Subscription plans and recurring services", ru: "Планы подписок и периодические услуги" },
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/subscriptions",
+        summary: { en: "List subscriptions", ru: "Список подписок" },
+        description: { en: "Get user's subscriptions", ru: "Получение подписок пользователя" },
+        auth: true,
+        responseExample: [{ id: "sub-uuid", userId: "user-uuid", planId: "plan-uuid", status: "active", startedAt: "2026-01-01T00:00:00Z", nextOrderAt: "2026-01-25T00:00:00Z" }]
+      },
+      {
+        method: "POST",
+        path: "/api/v1/subscriptions",
+        summary: { en: "Create subscription", ru: "Создать подписку" },
+        description: { en: "Create new subscription", ru: "Создание новой подписки" },
+        auth: true,
+        requestBody: { planId: "plan-uuid", addressId: "address-uuid", dayOfWeek: 1, timeSlot: "09:00-12:00" },
+        responseExample: { status: "success", data: { id: "sub-uuid", userId: "user-uuid", planId: "plan-uuid", status: "active", startedAt: "2026-01-18T10:30:00Z" } }
+      },
+      {
+        method: "PATCH",
+        path: "/api/v1/subscriptions/:id",
+        summary: { en: "Update subscription", ru: "Обновить подписку" },
+        description: { en: "Update subscription (pause, cancel, change plan)", ru: "Обновление подписки (пауза, отмена, смена плана)" },
+        auth: true,
+        requestBody: { status: "paused" },
+        responseExample: { status: "success", data: { id: "sub-uuid", status: "paused", pausedAt: "2026-01-18T10:30:00Z" } }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/subscription-plans",
+        summary: { en: "List plans", ru: "Список планов" },
+        description: { en: "Get available subscription plans", ru: "Получение доступных планов подписок" },
+        auth: false,
+        responseExample: [{ id: "plan-uuid", name: "Weekly Pickup", descriptionKey: "plan.weekly.description", basePrice: 99, currency: "ILS", isActive: true }]
+      },
+      {
+        method: "POST",
+        path: "/api/v1/subscription-plans",
+        summary: { en: "Create plan", ru: "Создать план" },
+        description: { en: "Create new subscription plan (staff only)", ru: "Создание нового плана подписки (только персонал)" },
+        auth: true,
+        permissions: ["subscriptions.manage"],
+        requestBody: { name: "Bi-weekly Pickup", descriptionKey: "plan.biweekly.description", basePrice: 149, currency: "ILS" },
+        responseExample: { status: "success", data: { id: "plan-uuid", name: "Bi-weekly Pickup", descriptionKey: "plan.biweekly.description", basePrice: 149, currency: "ILS", isActive: true } }
+      }
+    ]
+  },
+  {
+    name: { en: "Partners (v2)", ru: "Партнёры (v2)" },
+    icon: Store,
+    description: { en: "Partner marketplace and offers", ru: "Маркетплейс партнёров и предложения" },
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/partners",
+        summary: { en: "List partners", ru: "Список партнёров" },
+        description: { en: "Get all partners with filters: ?category, ?status", ru: "Получение всех партнёров с фильтрами: ?category, ?status" },
+        auth: false,
+        responseExample: [{ id: "partner-uuid", name: "CleanCo", category: "cleaning", status: "active", contactEmail: "info@cleanco.il" }]
+      },
+      {
+        method: "POST",
+        path: "/api/v1/partners",
+        summary: { en: "Create partner", ru: "Создать партнёра" },
+        description: { en: "Create new partner (staff only)", ru: "Создание нового партнёра (только персонал)" },
+        auth: true,
+        permissions: ["users.manage"],
+        requestBody: { name: "CleanCo", category: "cleaning", contactEmail: "info@cleanco.il" },
+        responseExample: { status: "success", data: { id: "partner-uuid", name: "CleanCo", category: "cleaning", status: "pending" } }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/partners/:id/offers",
+        summary: { en: "Partner offers", ru: "Офферы партнёра" },
+        description: { en: "Get partner's offers with filter: ?activeOnly", ru: "Получение офферов партнёра с фильтром: ?activeOnly" },
+        auth: false,
+        responseExample: [{ id: "offer-uuid", partnerId: "partner-uuid", titleKey: "offer.cleaning.title", descriptionKey: "offer.cleaning.description", price: 150, currency: "ILS", isActive: true }]
+      },
+      {
+        method: "POST",
+        path: "/api/v1/partners/:id/offers",
+        summary: { en: "Create offer", ru: "Создать оффер" },
+        description: { en: "Create new partner offer (staff only)", ru: "Создание нового оффера партнёра (только персонал)" },
+        auth: true,
+        permissions: ["users.manage"],
+        requestBody: { titleKey: "offer.cleaning.title", descriptionKey: "offer.cleaning.description", price: 150, bonusPrice: 50, availableForSegments: ["vip", "high_ltv"] },
+        responseExample: { status: "success", data: { id: "offer-uuid", partnerId: "partner-uuid", titleKey: "offer.cleaning.title", price: 150, bonusPrice: 50, isActive: true } }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/partner-offers",
+        summary: { en: "Offers by segments", ru: "Офферы по сегментам" },
+        description: { en: "Get offers available for user segments: ?segments=vip,high_ltv", ru: "Получение офферов, доступных для сегментов пользователя: ?segments=vip,high_ltv" },
+        auth: false,
+        responseExample: [{ id: "offer-uuid", partnerId: "partner-uuid", titleKey: "offer.cleaning.title", price: 150, bonusPrice: 50, availableForSegments: ["vip"], isActive: true }]
+      }
+    ]
+  },
+  {
+    name: { en: "Order Finance (v2)", ru: "Финансы заказа (v2)" },
+    icon: DollarSign,
+    description: { en: "Order financial snapshots and margin tracking", ru: "Финансовые снимки заказов и отслеживание маржи" },
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/orders/:id/finance",
+        summary: { en: "Get finance snapshot", ru: "Получить финансовый снимок" },
+        description: { en: "Get order's financial snapshot", ru: "Получение финансового снимка заказа" },
+        auth: true,
+        permissions: ["payments.read"],
+        responseExample: { id: "snapshot-uuid", orderId: "order-uuid", clientPrice: 100, courierPayout: 60, bonusSpent: 10, platformFee: 5, margin: 25, currency: "ILS", createdAt: "2026-01-18T10:30:00Z" }
+      },
+      {
+        method: "POST",
+        path: "/api/v1/orders/:id/finance",
+        summary: { en: "Create finance snapshot", ru: "Создать финансовый снимок" },
+        description: { en: "Create order's financial snapshot", ru: "Создание финансового снимка заказа" },
+        auth: true,
+        permissions: ["payments.read"],
+        requestBody: { clientPrice: 100, courierPayout: 60, bonusSpent: 10, platformFee: 5 },
+        responseExample: { status: "success", data: { id: "snapshot-uuid", orderId: "order-uuid", clientPrice: 100, courierPayout: 60, bonusSpent: 10, platformFee: 5, margin: 25, currency: "ILS" } }
+      },
+      {
+        method: "PATCH",
+        path: "/api/v1/orders/:id/finance",
+        summary: { en: "Update finance snapshot", ru: "Обновить финансовый снимок" },
+        description: { en: "Update order's financial snapshot", ru: "Обновление финансового снимка заказа" },
+        auth: true,
+        permissions: ["payments.read"],
+        requestBody: { courierPayout: 65 },
+        responseExample: { status: "success", data: { id: "snapshot-uuid", orderId: "order-uuid", clientPrice: 100, courierPayout: 65, bonusSpent: 10, platformFee: 5, margin: 20, currency: "ILS" } }
       }
     ]
   }

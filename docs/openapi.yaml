@@ -42,6 +42,20 @@ tags:
     description: Роли и права (ERP)
   - name: audit
     description: Аудит лог (ERP)
+  - name: events
+    description: Продуктовые события и аналитика (v2)
+  - name: activity
+    description: Активность пользователей (v2)
+  - name: flags
+    description: Флаги и сегментация пользователей (v2)
+  - name: bonus
+    description: Бонусная система (v2)
+  - name: subscriptions
+    description: Подписки и планы (v2)
+  - name: partners
+    description: Партнёры и маркетплейс (v2)
+  - name: finance
+    description: Финансовые снимки заказов (v2)
 
 paths:
   /health:
@@ -171,6 +185,110 @@ paths:
                     code:
                       type: string
                       enum: [created, scheduled, assigned, started, completed, cancelled, status_changed, courier_changed, price_changed, note_added]
+
+  /meta/event-types:
+    get:
+      tags: [system]
+      summary: Типы продуктовых событий (v2)
+      responses:
+        '200':
+          description: Список типов продуктовых событий для аналитики
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+
+  /meta/activity-types:
+    get:
+      tags: [system]
+      summary: Типы активности пользователей (v2)
+      responses:
+        '200':
+          description: Список типов активности
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+
+  /meta/user-flag-keys:
+    get:
+      tags: [system]
+      summary: Ключи флагов пользователей (v2)
+      responses:
+        '200':
+          description: Список доступных ключей флагов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+
+  /meta/bonus-transaction-types:
+    get:
+      tags: [system]
+      summary: Типы бонусных транзакций (v2)
+      responses:
+        '200':
+          description: Список типов транзакций
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [earn, spend, expire, adjust]
+
+  /meta/subscription-statuses:
+    get:
+      tags: [system]
+      summary: Статусы подписок (v2)
+      responses:
+        '200':
+          description: Список статусов подписок
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      enum: [active, paused, cancelled]
+
+  /meta/partner-categories:
+    get:
+      tags: [system]
+      summary: Категории партнёров (v2)
+      responses:
+        '200':
+          description: Список категорий партнёров
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
 
   /auth/register:
     post:
@@ -1209,3 +1327,252 @@ components:
         - session.device_not_found — устройство/сессия не найдена
         - session.deleted — сессия удалена
         - session.all_sessions_deleted — все сессии удалены
+
+    # ==================== V2 SCHEMAS ====================
+
+    Event:
+      type: object
+      description: Продуктовое событие для аналитики
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [order.created, order.completed, order.completed.shabbat, order.cancelled, subscription.started, subscription.paused, subscription.cancelled, bonus.earned, bonus.redeemed, bonus.expired, courier.batch.completed, user.segment.entered, user.segment.exited, partner.offer.viewed, partner.offer.redeemed]
+        actorType:
+          type: string
+          enum: [user, courier, system, staff]
+        actorId:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+        metadata:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    UserActivity:
+      type: object
+      description: Событие активности пользователя
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        eventType:
+          type: string
+          enum: [session_start, session_end, app_opened, order_placed, order_cancelled, subscription_started, subscription_paused, subscription_cancelled, bonus_earned, bonus_spent, payment_completed, address_added, profile_updated, referral_sent, support_contacted]
+        metadata:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    UserFlag:
+      type: object
+      description: Флаг пользователя для сегментации
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        key:
+          type: string
+          enum: [daily_user, shabbat_orders, high_frequency, no_tips, premium_candidate, churn_risk, high_ltv, price_sensitive, early_adopter, referrer, vip]
+        value:
+          type: boolean
+        source:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    BonusAccount:
+      type: object
+      description: Бонусный счёт пользователя
+      properties:
+        userId:
+          type: string
+        balance:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+
+    BonusTransaction:
+      type: object
+      description: Транзакция бонусного счёта
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        type:
+          type: string
+          enum: [earn, spend, expire, adjust]
+        amount:
+          type: integer
+        reason:
+          type: string
+          enum: [order_completion, referral, promo, subscription, manual, order_payment, partner_offer, subscription_payment, bonus_expiration]
+        referenceType:
+          type: string
+          nullable: true
+        referenceId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Subscription:
+      type: object
+      description: Подписка пользователя
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        planId:
+          type: string
+        addressId:
+          type: string
+        status:
+          type: string
+          enum: [active, paused, cancelled]
+        dayOfWeek:
+          type: integer
+          minimum: 0
+          maximum: 6
+        timeSlot:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        pausedAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+        nextOrderAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    SubscriptionPlan:
+      type: object
+      description: План подписки
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        descriptionKey:
+          type: string
+        basePrice:
+          type: number
+        currency:
+          type: string
+          default: ILS
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    Partner:
+      type: object
+      description: Партнёр маркетплейса
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+          enum: [cleaning, laundry, repair, moving, storage, other]
+        status:
+          type: string
+          enum: [pending, active, suspended]
+        contactEmail:
+          type: string
+          nullable: true
+        contactPhone:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    PartnerOffer:
+      type: object
+      description: Оффер партнёра
+      properties:
+        id:
+          type: string
+          format: uuid
+        partnerId:
+          type: string
+        titleKey:
+          type: string
+        descriptionKey:
+          type: string
+        price:
+          type: number
+        bonusPrice:
+          type: number
+          nullable: true
+        currency:
+          type: string
+          default: ILS
+        availableForSegments:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    OrderFinanceSnapshot:
+      type: object
+      description: Финансовый снимок заказа
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+        clientPrice:
+          type: number
+        courierPayout:
+          type: number
+        bonusSpent:
+          type: number
+        platformFee:
+          type: number
+        margin:
+          type: number
+        currency:
+          type: string
+          default: ILS
+        createdAt:
+          type: string
+          format: date-time

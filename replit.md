@@ -7,8 +7,6 @@ This project is a centralized REST API designed to serve as the backend for a wa
 I prefer detailed explanations.
 I want iterative development.
 Ask before making major changes.
-Do not make changes to the `client/src/pages/api-docs.tsx` file.
-Do not make changes to the `docs/openapi.yaml` file.
 Do not make changes to the `docs/POSTGRESQL_MIGRATION.md` file.
 
 ## System Architecture
