@@ -47,8 +47,12 @@ const apiSections: ApiSection[] = [
           password: "securePassword123"
         },
         responseExample: {
-          accessToken: "eyJhbGciOiJIUzI1NiIs...",
-          refreshToken: "eyJhbGciOiJIUzI1NiIs..."
+          status: "success",
+          message: { key: "auth.register_success", params: { userId: "uuid" } },
+          data: {
+            accessToken: "eyJhbGciOiJIUzI1NiIs...",
+            refreshToken: "eyJhbGciOiJIUzI1NiIs..."
+          }
         }
       },
       {
@@ -62,8 +66,12 @@ const apiSections: ApiSection[] = [
           password: "securePassword123"
         },
         responseExample: {
-          accessToken: "eyJhbGciOiJIUzI1NiIs...",
-          refreshToken: "eyJhbGciOiJIUzI1NiIs..."
+          status: "success",
+          message: { key: "auth.login_success", params: { userId: "uuid" } },
+          data: {
+            accessToken: "eyJhbGciOiJIUzI1NiIs...",
+            refreshToken: "eyJhbGciOiJIUzI1NiIs..."
+          }
         }
       },
       {
@@ -744,24 +752,74 @@ export default function ApiDocs() {
 
           <Card className="mt-8">
             <CardHeader>
-              <CardTitle className="text-lg">Формат ошибок</CardTitle>
+              <CardTitle className="text-lg">Интернационализация (i18n)</CardTitle>
             </CardHeader>
-            <CardContent>
-              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+            <CardContent className="space-y-4">
+              <div>
+                <h4 className="font-medium mb-2">Поддерживаемые языки</h4>
+                <div className="flex gap-2">
+                  <Badge>he</Badge>
+                  <Badge>ru</Badge>
+                  <Badge>ar</Badge>
+                  <Badge variant="outline">en (fallback)</Badge>
+                </div>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Заголовок Accept-Language</h4>
+                <pre className="bg-muted p-3 rounded-md text-xs">Accept-Language: he</pre>
+                <p className="text-sm text-muted-foreground mt-2">API возвращает заголовок Content-Language с выбранным языком</p>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Формат успешного ответа</h4>
+                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+{`{
+  "status": "success",
+  "message": {
+    "key": "order.created",
+    "params": { "orderId": "uuid" }
+  },
+  "data": { ... }
+}`}
+                </pre>
+              </div>
+              <div>
+                <h4 className="font-medium mb-2">Формат ошибки</h4>
+                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
 {`{
   "error": {
-    "code": "FORBIDDEN",
-    "message": "You do not have permission"
+    "key": "order.not_found",
+    "params": { "orderId": "uuid" }
   }
 }`}
-              </pre>
-              <div className="mt-4 space-y-2 text-sm">
-                <div className="flex items-center gap-2"><Badge variant="outline">400</Badge> <span className="text-muted-foreground">BAD_REQUEST - Неверный формат запроса</span></div>
-                <div className="flex items-center gap-2"><Badge variant="outline">401</Badge> <span className="text-muted-foreground">UNAUTHORIZED - Требуется авторизация</span></div>
-                <div className="flex items-center gap-2"><Badge variant="outline">403</Badge> <span className="text-muted-foreground">FORBIDDEN - Недостаточно прав</span></div>
-                <div className="flex items-center gap-2"><Badge variant="outline">404</Badge> <span className="text-muted-foreground">NOT_FOUND - Ресурс не найден</span></div>
-                <div className="flex items-center gap-2"><Badge variant="outline">409</Badge> <span className="text-muted-foreground">CONFLICT - Конфликт состояния</span></div>
-                <div className="flex items-center gap-2"><Badge variant="outline">429</Badge> <span className="text-muted-foreground">TOO_MANY_REQUESTS - Превышен лимит запросов</span></div>
+                </pre>
+              </div>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p><strong>Принципы:</strong></p>
+                <ul className="list-disc list-inside ml-2">
+                  <li>API возвращает только ключи локализации, не текст</li>
+                  <li>Форматирование дат/валют/чисел — на клиенте</li>
+                  <li>Даты в ISO 8601: <code className="bg-muted px-1">2026-01-15T10:30:00Z</code></li>
+                  <li>Деньги: <code className="bg-muted px-1">{`{ "amount": 25, "currency": "ILS" }`}</code></li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">HTTP коды ответов</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2"><Badge variant="outline">200</Badge> <span className="text-muted-foreground">Успешный запрос</span></div>
+                <div className="flex items-center gap-2"><Badge variant="outline">201</Badge> <span className="text-muted-foreground">Ресурс создан</span></div>
+                <div className="flex items-center gap-2"><Badge variant="outline">204</Badge> <span className="text-muted-foreground">Нет контента (удаление)</span></div>
+                <div className="flex items-center gap-2"><Badge variant="outline">400</Badge> <span className="text-muted-foreground">Неверный формат запроса</span></div>
+                <div className="flex items-center gap-2"><Badge variant="outline">401</Badge> <span className="text-muted-foreground">Требуется авторизация</span></div>
+                <div className="flex items-center gap-2"><Badge variant="outline">403</Badge> <span className="text-muted-foreground">Недостаточно прав</span></div>
+                <div className="flex items-center gap-2"><Badge variant="outline">404</Badge> <span className="text-muted-foreground">Ресурс не найден</span></div>
+                <div className="flex items-center gap-2"><Badge variant="outline">409</Badge> <span className="text-muted-foreground">Конфликт состояния</span></div>
+                <div className="flex items-center gap-2"><Badge variant="outline">429</Badge> <span className="text-muted-foreground">Превышен лимит запросов</span></div>
               </div>
             </CardContent>
           </Card>
