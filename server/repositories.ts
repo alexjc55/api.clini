@@ -2,7 +2,17 @@ import type {
   User, InsertUser, Role, InsertRole, Permission, InsertPermission,
   Address, InsertAddress, CourierProfile, UpdateCourierProfile,
   Order, InsertOrder, UpdateOrder, OrderEvent, InsertOrderEvent,
-  UserType, UserStatus, OrderStatus, AuditLog, Session
+  UserType, UserStatus, OrderStatus, AuditLog, Session,
+  Event, InsertEvent, ProductEventType, EventActorType,
+  UserActivity, InsertUserActivity, UserActivityType,
+  UserFlag, InsertUserFlag, UserFlagKey,
+  BonusAccount, BonusTransaction, InsertBonusTransaction, BonusTransactionType,
+  Subscription, InsertSubscription, UpdateSubscription, SubscriptionStatus,
+  SubscriptionRule, InsertSubscriptionRule,
+  SubscriptionPlan, InsertSubscriptionPlan,
+  Partner, InsertPartner, PartnerCategory, PartnerStatus,
+  PartnerOffer, InsertPartnerOffer,
+  OrderFinanceSnapshot, InsertOrderFinanceSnapshot
 } from "@shared/schema";
 
 export interface IUserRepository {
@@ -83,6 +93,69 @@ export interface ISessionRepository {
   deleteUserSessions(userId: string): Promise<void>;
 }
 
+// ==================== V2 REPOSITORIES ====================
+
+export interface IEventRepository {
+  createEvent(event: InsertEvent): Promise<Event>;
+  getEvent(id: string): Promise<Event | undefined>;
+  getEvents(filters?: { type?: ProductEventType; actorType?: EventActorType; actorId?: string; entityType?: string; entityId?: string; from?: string; to?: string }): Promise<Event[]>;
+}
+
+export interface IUserActivityRepository {
+  createUserActivity(userId: string, activity: InsertUserActivity): Promise<UserActivity>;
+  getUserActivities(userId: string, filters?: { eventType?: UserActivityType; from?: string; to?: string }): Promise<UserActivity[]>;
+  getUserActivitySummary(userId: string): Promise<Record<UserActivityType, number>>;
+}
+
+export interface IUserFlagRepository {
+  getUserFlags(userId: string): Promise<UserFlag[]>;
+  getUserFlag(userId: string, key: UserFlagKey): Promise<UserFlag | undefined>;
+  setUserFlag(userId: string, flag: InsertUserFlag): Promise<UserFlag>;
+  deleteUserFlag(userId: string, key: UserFlagKey): Promise<boolean>;
+  getUsersByFlag(key: UserFlagKey, value?: boolean): Promise<string[]>;
+}
+
+export interface IBonusRepository {
+  getBonusAccount(userId: string): Promise<BonusAccount>;
+  createBonusTransaction(userId: string, transaction: InsertBonusTransaction): Promise<BonusTransaction>;
+  getBonusTransactions(userId: string, filters?: { type?: BonusTransactionType; from?: string; to?: string }): Promise<BonusTransaction[]>;
+}
+
+export interface ISubscriptionRepository {
+  getSubscription(id: string): Promise<Subscription | undefined>;
+  getSubscriptionsByUser(userId: string): Promise<Subscription[]>;
+  createSubscription(userId: string, subscription: InsertSubscription): Promise<Subscription>;
+  updateSubscription(id: string, updates: UpdateSubscription): Promise<Subscription | undefined>;
+  getSubscriptionRules(subscriptionId: string): Promise<SubscriptionRule[]>;
+  createSubscriptionRule(subscriptionId: string, rule: InsertSubscriptionRule): Promise<SubscriptionRule>;
+  deleteSubscriptionRule(ruleId: string): Promise<boolean>;
+}
+
+export interface ISubscriptionPlanRepository {
+  getSubscriptionPlan(id: string): Promise<SubscriptionPlan | undefined>;
+  getSubscriptionPlans(activeOnly?: boolean): Promise<SubscriptionPlan[]>;
+  createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
+  updateSubscriptionPlan(id: string, updates: Partial<SubscriptionPlan>): Promise<SubscriptionPlan | undefined>;
+}
+
+export interface IPartnerRepository {
+  getPartner(id: string): Promise<Partner | undefined>;
+  getPartners(filters?: { category?: PartnerCategory; status?: PartnerStatus }): Promise<Partner[]>;
+  createPartner(partner: InsertPartner): Promise<Partner>;
+  updatePartner(id: string, updates: Partial<Partner>): Promise<Partner | undefined>;
+  getPartnerOffers(partnerId: string, activeOnly?: boolean): Promise<PartnerOffer[]>;
+  getPartnerOffer(id: string): Promise<PartnerOffer | undefined>;
+  createPartnerOffer(partnerId: string, offer: InsertPartnerOffer): Promise<PartnerOffer>;
+  updatePartnerOffer(id: string, updates: Partial<PartnerOffer>): Promise<PartnerOffer | undefined>;
+  getOffersForSegments(segments: string[]): Promise<PartnerOffer[]>;
+}
+
+export interface IOrderFinanceRepository {
+  getOrderFinanceSnapshot(orderId: string): Promise<OrderFinanceSnapshot | undefined>;
+  createOrderFinanceSnapshot(orderId: string, snapshot: InsertOrderFinanceSnapshot): Promise<OrderFinanceSnapshot>;
+  updateOrderFinanceSnapshot(orderId: string, updates: Partial<InsertOrderFinanceSnapshot>): Promise<OrderFinanceSnapshot | undefined>;
+}
+
 export interface IStorage extends 
   IUserRepository,
   IRoleRepository,
@@ -93,6 +166,14 @@ export interface IStorage extends
   IOrderRepository,
   IOrderEventRepository,
   IAuditLogRepository,
-  ISessionRepository {
+  ISessionRepository,
+  IEventRepository,
+  IUserActivityRepository,
+  IUserFlagRepository,
+  IBonusRepository,
+  ISubscriptionRepository,
+  ISubscriptionPlanRepository,
+  IPartnerRepository,
+  IOrderFinanceRepository {
   initDefaults(): Promise<void>;
 }

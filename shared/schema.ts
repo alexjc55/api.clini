@@ -281,3 +281,274 @@ export const defaultRoles: { name: string; permissions: string[] }[] = [
     permissions: ["orders.read", "orders.assign", "orders.update_status"],
   },
 ];
+
+// ==================== V2 MODULES ====================
+
+// Event System - Product Analytics (separate from AuditLog)
+export const eventActorTypes = ["client", "courier", "system"] as const;
+export type EventActorType = (typeof eventActorTypes)[number];
+
+export const productEventTypes = [
+  "order.created", "order.completed", "order.completed.shabbat", "order.cancelled",
+  "subscription.started", "subscription.paused", "subscription.cancelled",
+  "bonus.earned", "bonus.redeemed", "bonus.expired",
+  "courier.batch.completed",
+  "user.segment.entered", "user.segment.exited",
+  "partner.offer.viewed", "partner.offer.redeemed"
+] as const;
+export type ProductEventType = (typeof productEventTypes)[number];
+
+export interface Event {
+  id: string;
+  type: ProductEventType;
+  actorType: EventActorType;
+  actorId: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export const insertEventSchema = z.object({
+  type: z.enum(productEventTypes),
+  actorType: z.enum(eventActorTypes),
+  actorId: z.string().uuid().nullable().optional(),
+  entityType: z.string().nullable().optional(),
+  entityId: z.string().uuid().nullable().optional(),
+  payload: z.record(z.unknown()).optional().default({}),
+});
+export type InsertEvent = z.infer<typeof insertEventSchema>;
+
+// User Activity - Behavior History (Customer Timeline)
+export const userActivityTypes = [
+  "daily_pickup", "skip_day", "cancellation", "shabbat_call",
+  "tip_given", "app_opened", "order_rated", "support_contacted",
+  "subscription_changed", "address_added", "referral_sent"
+] as const;
+export type UserActivityType = (typeof userActivityTypes)[number];
+
+export interface UserActivity {
+  id: string;
+  userId: string;
+  eventType: UserActivityType;
+  referenceType: string | null;
+  referenceId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export const insertUserActivitySchema = z.object({
+  eventType: z.enum(userActivityTypes),
+  referenceType: z.string().nullable().optional(),
+  referenceId: z.string().uuid().nullable().optional(),
+  metadata: z.record(z.unknown()).optional().default({}),
+});
+export type InsertUserActivity = z.infer<typeof insertUserActivitySchema>;
+
+// User Flags - Segmentation
+export const userFlagSources = ["system", "manual", "ml"] as const;
+export type UserFlagSource = (typeof userFlagSources)[number];
+
+export const userFlagKeys = [
+  "daily_user", "shabbat_orders", "high_frequency", "no_tips",
+  "premium_candidate", "churn_risk", "high_ltv", "price_sensitive",
+  "early_adopter", "referrer", "vip"
+] as const;
+export type UserFlagKey = (typeof userFlagKeys)[number];
+
+export interface UserFlag {
+  id: string;
+  userId: string;
+  key: UserFlagKey;
+  value: boolean;
+  source: UserFlagSource;
+  createdAt: string;
+}
+
+export const insertUserFlagSchema = z.object({
+  key: z.enum(userFlagKeys),
+  value: z.boolean().default(true),
+  source: z.enum(userFlagSources).default("manual"),
+});
+export type InsertUserFlag = z.infer<typeof insertUserFlagSchema>;
+
+// Bonus System
+export interface BonusAccount {
+  userId: string;
+  balance: number;
+  updatedAt: string;
+}
+
+export const bonusTransactionTypes = ["earn", "spend", "expire", "adjust"] as const;
+export type BonusTransactionType = (typeof bonusTransactionTypes)[number];
+
+export const bonusReasons = [
+  "daily_streak", "referral", "partner_service", "order_completion",
+  "shabbat_bonus", "loyalty_reward", "manual_adjustment", "expiration",
+  "order_payment", "partner_payment", "promo_code"
+] as const;
+export type BonusReason = (typeof bonusReasons)[number];
+
+export interface BonusTransaction {
+  id: string;
+  userId: string;
+  type: BonusTransactionType;
+  amount: number;
+  reason: BonusReason;
+  referenceType: string | null;
+  referenceId: string | null;
+  createdAt: string;
+}
+
+export const insertBonusTransactionSchema = z.object({
+  type: z.enum(bonusTransactionTypes),
+  amount: z.number().int(),
+  reason: z.enum(bonusReasons),
+  referenceType: z.string().nullable().optional(),
+  referenceId: z.string().uuid().nullable().optional(),
+});
+export type InsertBonusTransaction = z.infer<typeof insertBonusTransactionSchema>;
+
+// Subscriptions
+export const subscriptionStatuses = ["active", "paused", "cancelled", "expired"] as const;
+export type SubscriptionStatus = (typeof subscriptionStatuses)[number];
+
+export interface Subscription {
+  id: string;
+  userId: string;
+  planId: string;
+  status: SubscriptionStatus;
+  startedAt: string;
+  pausedAt: string | null;
+  cancelledAt: string | null;
+  nextBillingAt: string | null;
+  createdAt: string;
+}
+
+export const insertSubscriptionSchema = z.object({
+  planId: z.string().uuid(),
+  startedAt: z.string().optional(),
+});
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+
+export const updateSubscriptionSchema = z.object({
+  status: z.enum(subscriptionStatuses).optional(),
+  nextBillingAt: z.string().nullable().optional(),
+});
+export type UpdateSubscription = z.infer<typeof updateSubscriptionSchema>;
+
+// Subscription Rules
+export const subscriptionRuleTypes = ["daily", "weekdays", "weekend", "custom"] as const;
+export type SubscriptionRuleType = (typeof subscriptionRuleTypes)[number];
+
+export interface SubscriptionRule {
+  id: string;
+  subscriptionId: string;
+  type: SubscriptionRuleType;
+  timeWindow: string;
+  priceModifier: number;
+  daysOfWeek: number[] | null;
+  createdAt: string;
+}
+
+export const insertSubscriptionRuleSchema = z.object({
+  type: z.enum(subscriptionRuleTypes),
+  timeWindow: z.string(),
+  priceModifier: z.number().default(0),
+  daysOfWeek: z.array(z.number().min(0).max(6)).nullable().optional(),
+});
+export type InsertSubscriptionRule = z.infer<typeof insertSubscriptionRuleSchema>;
+
+// Subscription Plans
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  descriptionKey: string;
+  basePrice: number;
+  currency: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export const insertSubscriptionPlanSchema = z.object({
+  name: z.string().min(2),
+  descriptionKey: z.string(),
+  basePrice: z.number().positive(),
+  currency: z.string().default("ILS"),
+  isActive: z.boolean().default(true),
+});
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+
+// Partners / Marketplace
+export const partnerCategories = [
+  "cleaning", "pets", "moving", "water_delivery",
+  "insurance", "telecom", "laundry", "handyman", "other"
+] as const;
+export type PartnerCategory = (typeof partnerCategories)[number];
+
+export const partnerStatuses = ["active", "inactive", "pending"] as const;
+export type PartnerStatus = (typeof partnerStatuses)[number];
+
+export interface Partner {
+  id: string;
+  name: string;
+  category: PartnerCategory;
+  status: PartnerStatus;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  createdAt: string;
+}
+
+export const insertPartnerSchema = z.object({
+  name: z.string().min(2),
+  category: z.enum(partnerCategories),
+  status: z.enum(partnerStatuses).default("pending"),
+  contactEmail: z.string().email().nullable().optional(),
+  contactPhone: z.string().nullable().optional(),
+});
+export type InsertPartner = z.infer<typeof insertPartnerSchema>;
+
+export interface PartnerOffer {
+  id: string;
+  partnerId: string;
+  titleKey: string;
+  descriptionKey: string;
+  price: number;
+  bonusPrice: number | null;
+  currency: string;
+  availableForSegments: string[];
+  isActive: boolean;
+  createdAt: string;
+}
+
+export const insertPartnerOfferSchema = z.object({
+  titleKey: z.string(),
+  descriptionKey: z.string(),
+  price: z.number().positive(),
+  bonusPrice: z.number().positive().nullable().optional(),
+  currency: z.string().default("ILS"),
+  availableForSegments: z.array(z.string()).default([]),
+  isActive: z.boolean().default(true),
+});
+export type InsertPartnerOffer = z.infer<typeof insertPartnerOfferSchema>;
+
+// Order Finance Snapshot - Unit Economics
+export interface OrderFinanceSnapshot {
+  id: string;
+  orderId: string;
+  clientPrice: number;
+  courierPayout: number;
+  bonusSpent: number;
+  platformFee: number;
+  margin: number;
+  currency: string;
+  createdAt: string;
+}
+
+export const insertOrderFinanceSnapshotSchema = z.object({
+  clientPrice: z.number(),
+  courierPayout: z.number(),
+  bonusSpent: z.number().default(0),
+  platformFee: z.number().default(0),
+});
+export type InsertOrderFinanceSnapshot = z.infer<typeof insertOrderFinanceSnapshotSchema>;

@@ -4,8 +4,19 @@ import type {
   User, InsertUser, Role, InsertRole, Permission, InsertPermission,
   Address, InsertAddress, CourierProfile, UpdateCourierProfile,
   Order, InsertOrder, UpdateOrder, OrderEvent, InsertOrderEvent,
-  UserType, UserStatus, OrderStatus, AuditLog, Session
+  UserType, UserStatus, OrderStatus, AuditLog, Session,
+  Event, InsertEvent, ProductEventType, EventActorType,
+  UserActivity, InsertUserActivity, UserActivityType,
+  UserFlag, InsertUserFlag, UserFlagKey,
+  BonusAccount, BonusTransaction, InsertBonusTransaction, BonusTransactionType,
+  Subscription, InsertSubscription, UpdateSubscription,
+  SubscriptionRule, InsertSubscriptionRule,
+  SubscriptionPlan, InsertSubscriptionPlan,
+  Partner, InsertPartner, PartnerCategory, PartnerStatus,
+  PartnerOffer, InsertPartnerOffer,
+  OrderFinanceSnapshot, InsertOrderFinanceSnapshot
 } from "@shared/schema";
+import { userActivityTypes } from "@shared/schema";
 import { IStorage } from "./repositories";
 
 export type { IStorage };
@@ -30,6 +41,19 @@ export class MemStorage implements IStorage {
   private orderEvents: Map<string, OrderEvent[]> = new Map();
   private auditLogs: AuditLog[] = [];
   private sessions: Map<string, Session> = new Map();
+  
+  // V2 Storage
+  private events: Map<string, Event> = new Map();
+  private userActivities: Map<string, UserActivity[]> = new Map();
+  private userFlags: Map<string, Map<UserFlagKey, UserFlag>> = new Map();
+  private bonusAccounts: Map<string, BonusAccount> = new Map();
+  private bonusTransactions: Map<string, BonusTransaction[]> = new Map();
+  private subscriptions: Map<string, Subscription> = new Map();
+  private subscriptionRules: Map<string, SubscriptionRule[]> = new Map();
+  private subscriptionPlans: Map<string, SubscriptionPlan> = new Map();
+  private partners: Map<string, Partner> = new Map();
+  private partnerOffers: Map<string, PartnerOffer[]> = new Map();
+  private orderFinanceSnapshots: Map<string, OrderFinanceSnapshot> = new Map();
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
@@ -475,6 +499,409 @@ export class MemStorage implements IStorage {
         this.sessions.delete(id);
       }
     }
+  }
+
+  // ==================== V2 IMPLEMENTATIONS ====================
+
+  // Events
+  async createEvent(event: InsertEvent): Promise<Event> {
+    const newEvent: Event = {
+      id: randomUUID(),
+      type: event.type,
+      actorType: event.actorType,
+      actorId: event.actorId || null,
+      entityType: event.entityType || null,
+      entityId: event.entityId || null,
+      payload: event.payload || {},
+      createdAt: new Date().toISOString()
+    };
+    this.events.set(newEvent.id, newEvent);
+    return newEvent;
+  }
+
+  async getEvent(id: string): Promise<Event | undefined> {
+    return this.events.get(id);
+  }
+
+  async getEvents(filters?: { type?: ProductEventType; actorType?: EventActorType; actorId?: string; entityType?: string; entityId?: string; from?: string; to?: string }): Promise<Event[]> {
+    let events = Array.from(this.events.values());
+    if (filters?.type) events = events.filter(e => e.type === filters.type);
+    if (filters?.actorType) events = events.filter(e => e.actorType === filters.actorType);
+    if (filters?.actorId) events = events.filter(e => e.actorId === filters.actorId);
+    if (filters?.entityType) events = events.filter(e => e.entityType === filters.entityType);
+    if (filters?.entityId) events = events.filter(e => e.entityId === filters.entityId);
+    if (filters?.from) events = events.filter(e => new Date(e.createdAt) >= new Date(filters.from!));
+    if (filters?.to) events = events.filter(e => new Date(e.createdAt) <= new Date(filters.to!));
+    return events.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  // User Activity
+  async createUserActivity(userId: string, activity: InsertUserActivity): Promise<UserActivity> {
+    const newActivity: UserActivity = {
+      id: randomUUID(),
+      userId,
+      eventType: activity.eventType,
+      referenceType: activity.referenceType || null,
+      referenceId: activity.referenceId || null,
+      metadata: activity.metadata || {},
+      createdAt: new Date().toISOString()
+    };
+    if (!this.userActivities.has(userId)) {
+      this.userActivities.set(userId, []);
+    }
+    this.userActivities.get(userId)!.push(newActivity);
+    return newActivity;
+  }
+
+  async getUserActivities(userId: string, filters?: { eventType?: UserActivityType; from?: string; to?: string }): Promise<UserActivity[]> {
+    let activities = this.userActivities.get(userId) || [];
+    if (filters?.eventType) activities = activities.filter(a => a.eventType === filters.eventType);
+    if (filters?.from) activities = activities.filter(a => new Date(a.createdAt) >= new Date(filters.from!));
+    if (filters?.to) activities = activities.filter(a => new Date(a.createdAt) <= new Date(filters.to!));
+    return activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getUserActivitySummary(userId: string): Promise<Record<UserActivityType, number>> {
+    const activities = this.userActivities.get(userId) || [];
+    const summary: Record<string, number> = {};
+    for (const type of userActivityTypes) {
+      summary[type] = activities.filter(a => a.eventType === type).length;
+    }
+    return summary as Record<UserActivityType, number>;
+  }
+
+  // User Flags
+  async getUserFlags(userId: string): Promise<UserFlag[]> {
+    const flags = this.userFlags.get(userId);
+    if (!flags) return [];
+    return Array.from(flags.values());
+  }
+
+  async getUserFlag(userId: string, key: UserFlagKey): Promise<UserFlag | undefined> {
+    return this.userFlags.get(userId)?.get(key);
+  }
+
+  async setUserFlag(userId: string, flag: InsertUserFlag): Promise<UserFlag> {
+    if (!this.userFlags.has(userId)) {
+      this.userFlags.set(userId, new Map());
+    }
+    const existing = this.userFlags.get(userId)!.get(flag.key);
+    const userFlag: UserFlag = {
+      id: existing?.id || randomUUID(),
+      userId,
+      key: flag.key,
+      value: flag.value ?? true,
+      source: flag.source || "manual",
+      createdAt: existing?.createdAt || new Date().toISOString()
+    };
+    this.userFlags.get(userId)!.set(flag.key, userFlag);
+    return userFlag;
+  }
+
+  async deleteUserFlag(userId: string, key: UserFlagKey): Promise<boolean> {
+    return this.userFlags.get(userId)?.delete(key) || false;
+  }
+
+  async getUsersByFlag(key: UserFlagKey, value = true): Promise<string[]> {
+    const userIds: string[] = [];
+    const entries = Array.from(this.userFlags.entries());
+    for (const [userId, flags] of entries) {
+      const flag = flags.get(key);
+      if (flag && flag.value === value) {
+        userIds.push(userId);
+      }
+    }
+    return userIds;
+  }
+
+  // Bonus System
+  async getBonusAccount(userId: string): Promise<BonusAccount> {
+    let account = this.bonusAccounts.get(userId);
+    if (!account) {
+      account = { userId, balance: 0, updatedAt: new Date().toISOString() };
+      this.bonusAccounts.set(userId, account);
+    }
+    return account;
+  }
+
+  async createBonusTransaction(userId: string, transaction: InsertBonusTransaction): Promise<BonusTransaction> {
+    const account = await this.getBonusAccount(userId);
+    
+    const newTransaction: BonusTransaction = {
+      id: randomUUID(),
+      userId,
+      type: transaction.type,
+      amount: transaction.amount,
+      reason: transaction.reason,
+      referenceType: transaction.referenceType || null,
+      referenceId: transaction.referenceId || null,
+      createdAt: new Date().toISOString()
+    };
+
+    // Update balance
+    if (transaction.type === "earn") {
+      account.balance += transaction.amount;
+    } else if (transaction.type === "spend" || transaction.type === "expire") {
+      account.balance -= transaction.amount;
+    } else if (transaction.type === "adjust") {
+      account.balance += transaction.amount; // Can be negative
+    }
+    account.updatedAt = new Date().toISOString();
+    this.bonusAccounts.set(userId, account);
+
+    if (!this.bonusTransactions.has(userId)) {
+      this.bonusTransactions.set(userId, []);
+    }
+    this.bonusTransactions.get(userId)!.push(newTransaction);
+    return newTransaction;
+  }
+
+  async getBonusTransactions(userId: string, filters?: { type?: BonusTransactionType; from?: string; to?: string }): Promise<BonusTransaction[]> {
+    let transactions = this.bonusTransactions.get(userId) || [];
+    if (filters?.type) transactions = transactions.filter(t => t.type === filters.type);
+    if (filters?.from) transactions = transactions.filter(t => new Date(t.createdAt) >= new Date(filters.from!));
+    if (filters?.to) transactions = transactions.filter(t => new Date(t.createdAt) <= new Date(filters.to!));
+    return transactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  // Subscriptions
+  async getSubscription(id: string): Promise<Subscription | undefined> {
+    return this.subscriptions.get(id);
+  }
+
+  async getSubscriptionsByUser(userId: string): Promise<Subscription[]> {
+    return Array.from(this.subscriptions.values()).filter(s => s.userId === userId);
+  }
+
+  async createSubscription(userId: string, subscription: InsertSubscription): Promise<Subscription> {
+    const newSubscription: Subscription = {
+      id: randomUUID(),
+      userId,
+      planId: subscription.planId,
+      status: "active",
+      startedAt: subscription.startedAt || new Date().toISOString(),
+      pausedAt: null,
+      cancelledAt: null,
+      nextBillingAt: null,
+      createdAt: new Date().toISOString()
+    };
+    this.subscriptions.set(newSubscription.id, newSubscription);
+    this.subscriptionRules.set(newSubscription.id, []);
+    return newSubscription;
+  }
+
+  async updateSubscription(id: string, updates: UpdateSubscription): Promise<Subscription | undefined> {
+    const subscription = this.subscriptions.get(id);
+    if (!subscription) return undefined;
+    
+    if (updates.status === "paused" && subscription.status === "active") {
+      subscription.pausedAt = new Date().toISOString();
+    } else if (updates.status === "cancelled") {
+      subscription.cancelledAt = new Date().toISOString();
+    }
+    
+    Object.assign(subscription, updates);
+    this.subscriptions.set(id, subscription);
+    return subscription;
+  }
+
+  async getSubscriptionRules(subscriptionId: string): Promise<SubscriptionRule[]> {
+    return this.subscriptionRules.get(subscriptionId) || [];
+  }
+
+  async createSubscriptionRule(subscriptionId: string, rule: InsertSubscriptionRule): Promise<SubscriptionRule> {
+    const newRule: SubscriptionRule = {
+      id: randomUUID(),
+      subscriptionId,
+      type: rule.type,
+      timeWindow: rule.timeWindow,
+      priceModifier: rule.priceModifier || 0,
+      daysOfWeek: rule.daysOfWeek || null,
+      createdAt: new Date().toISOString()
+    };
+    if (!this.subscriptionRules.has(subscriptionId)) {
+      this.subscriptionRules.set(subscriptionId, []);
+    }
+    this.subscriptionRules.get(subscriptionId)!.push(newRule);
+    return newRule;
+  }
+
+  async deleteSubscriptionRule(ruleId: string): Promise<boolean> {
+    const entries = Array.from(this.subscriptionRules.entries());
+    for (const [_subId, rules] of entries) {
+      const idx = rules.findIndex((r: SubscriptionRule) => r.id === ruleId);
+      if (idx !== -1) {
+        rules.splice(idx, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Subscription Plans
+  async getSubscriptionPlan(id: string): Promise<SubscriptionPlan | undefined> {
+    return this.subscriptionPlans.get(id);
+  }
+
+  async getSubscriptionPlans(activeOnly = false): Promise<SubscriptionPlan[]> {
+    let plans = Array.from(this.subscriptionPlans.values());
+    if (activeOnly) plans = plans.filter(p => p.isActive);
+    return plans;
+  }
+
+  async createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan> {
+    const newPlan: SubscriptionPlan = {
+      id: randomUUID(),
+      name: plan.name,
+      descriptionKey: plan.descriptionKey,
+      basePrice: plan.basePrice,
+      currency: plan.currency || "ILS",
+      isActive: plan.isActive ?? true,
+      createdAt: new Date().toISOString()
+    };
+    this.subscriptionPlans.set(newPlan.id, newPlan);
+    return newPlan;
+  }
+
+  async updateSubscriptionPlan(id: string, updates: Partial<SubscriptionPlan>): Promise<SubscriptionPlan | undefined> {
+    const plan = this.subscriptionPlans.get(id);
+    if (!plan) return undefined;
+    Object.assign(plan, updates);
+    this.subscriptionPlans.set(id, plan);
+    return plan;
+  }
+
+  // Partners
+  async getPartner(id: string): Promise<Partner | undefined> {
+    return this.partners.get(id);
+  }
+
+  async getPartners(filters?: { category?: PartnerCategory; status?: PartnerStatus }): Promise<Partner[]> {
+    let partners = Array.from(this.partners.values());
+    if (filters?.category) partners = partners.filter(p => p.category === filters.category);
+    if (filters?.status) partners = partners.filter(p => p.status === filters.status);
+    return partners;
+  }
+
+  async createPartner(partner: InsertPartner): Promise<Partner> {
+    const newPartner: Partner = {
+      id: randomUUID(),
+      name: partner.name,
+      category: partner.category,
+      status: partner.status || "pending",
+      contactEmail: partner.contactEmail || null,
+      contactPhone: partner.contactPhone || null,
+      createdAt: new Date().toISOString()
+    };
+    this.partners.set(newPartner.id, newPartner);
+    this.partnerOffers.set(newPartner.id, []);
+    return newPartner;
+  }
+
+  async updatePartner(id: string, updates: Partial<Partner>): Promise<Partner | undefined> {
+    const partner = this.partners.get(id);
+    if (!partner) return undefined;
+    Object.assign(partner, updates);
+    this.partners.set(id, partner);
+    return partner;
+  }
+
+  async getPartnerOffers(partnerId: string, activeOnly = false): Promise<PartnerOffer[]> {
+    let offers = this.partnerOffers.get(partnerId) || [];
+    if (activeOnly) offers = offers.filter(o => o.isActive);
+    return offers;
+  }
+
+  async getPartnerOffer(id: string): Promise<PartnerOffer | undefined> {
+    const allOfferLists = Array.from(this.partnerOffers.values());
+    for (const offers of allOfferLists) {
+      const offer = offers.find((o: PartnerOffer) => o.id === id);
+      if (offer) return offer;
+    }
+    return undefined;
+  }
+
+  async createPartnerOffer(partnerId: string, offer: InsertPartnerOffer): Promise<PartnerOffer> {
+    const newOffer: PartnerOffer = {
+      id: randomUUID(),
+      partnerId,
+      titleKey: offer.titleKey,
+      descriptionKey: offer.descriptionKey,
+      price: offer.price,
+      bonusPrice: offer.bonusPrice || null,
+      currency: offer.currency || "ILS",
+      availableForSegments: offer.availableForSegments || [],
+      isActive: offer.isActive ?? true,
+      createdAt: new Date().toISOString()
+    };
+    if (!this.partnerOffers.has(partnerId)) {
+      this.partnerOffers.set(partnerId, []);
+    }
+    this.partnerOffers.get(partnerId)!.push(newOffer);
+    return newOffer;
+  }
+
+  async updatePartnerOffer(id: string, updates: Partial<PartnerOffer>): Promise<PartnerOffer | undefined> {
+    const allOfferLists = Array.from(this.partnerOffers.values());
+    for (const offers of allOfferLists) {
+      const offer = offers.find((o: PartnerOffer) => o.id === id);
+      if (offer) {
+        Object.assign(offer, updates);
+        return offer;
+      }
+    }
+    return undefined;
+  }
+
+  async getOffersForSegments(segments: string[]): Promise<PartnerOffer[]> {
+    const allOffers: PartnerOffer[] = [];
+    const allOfferLists = Array.from(this.partnerOffers.values());
+    for (const offers of allOfferLists) {
+      for (const offer of offers) {
+        if (!offer.isActive) continue;
+        if (offer.availableForSegments.length === 0 || 
+            offer.availableForSegments.some((s: string) => segments.includes(s))) {
+          allOffers.push(offer);
+        }
+      }
+    }
+    return allOffers;
+  }
+
+  // Order Finance Snapshot
+  async getOrderFinanceSnapshot(orderId: string): Promise<OrderFinanceSnapshot | undefined> {
+    return this.orderFinanceSnapshots.get(orderId);
+  }
+
+  async createOrderFinanceSnapshot(orderId: string, snapshot: InsertOrderFinanceSnapshot): Promise<OrderFinanceSnapshot> {
+    const margin = snapshot.clientPrice - snapshot.courierPayout - snapshot.platformFee;
+    const newSnapshot: OrderFinanceSnapshot = {
+      id: randomUUID(),
+      orderId,
+      clientPrice: snapshot.clientPrice,
+      courierPayout: snapshot.courierPayout,
+      bonusSpent: snapshot.bonusSpent || 0,
+      platformFee: snapshot.platformFee || 0,
+      margin,
+      currency: "ILS",
+      createdAt: new Date().toISOString()
+    };
+    this.orderFinanceSnapshots.set(orderId, newSnapshot);
+    return newSnapshot;
+  }
+
+  async updateOrderFinanceSnapshot(orderId: string, updates: Partial<InsertOrderFinanceSnapshot>): Promise<OrderFinanceSnapshot | undefined> {
+    const snapshot = this.orderFinanceSnapshots.get(orderId);
+    if (!snapshot) return undefined;
+    
+    if (updates.clientPrice !== undefined) snapshot.clientPrice = updates.clientPrice;
+    if (updates.courierPayout !== undefined) snapshot.courierPayout = updates.courierPayout;
+    if (updates.bonusSpent !== undefined) snapshot.bonusSpent = updates.bonusSpent;
+    if (updates.platformFee !== undefined) snapshot.platformFee = updates.platformFee;
+    
+    snapshot.margin = snapshot.clientPrice - snapshot.courierPayout - snapshot.platformFee;
+    this.orderFinanceSnapshots.set(orderId, snapshot);
+    return snapshot;
   }
 
   async initDefaults(): Promise<void> {

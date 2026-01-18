@@ -12,11 +12,33 @@ import {
   insertUserSchema, loginSchema, insertAddressSchema, insertOrderSchema,
   updateOrderSchema, updateCourierProfileSchema, insertRoleSchema,
   orderStatuses, userTypes, userStatuses, availabilityStatuses, verificationStatuses, orderEventTypes,
-  isValidStatusTransition, type OrderStatus, type AuditAction
+  isValidStatusTransition, type OrderStatus, type AuditAction,
+  insertEventSchema, productEventTypes, eventActorTypes,
+  insertUserActivitySchema, userActivityTypes,
+  insertUserFlagSchema, userFlagKeys,
+  insertBonusTransactionSchema, bonusTransactionTypes, bonusReasons,
+  insertSubscriptionSchema, updateSubscriptionSchema, subscriptionStatuses,
+  insertSubscriptionRuleSchema, subscriptionRuleTypes,
+  insertSubscriptionPlanSchema,
+  insertPartnerSchema, partnerCategories, partnerStatuses,
+  insertPartnerOfferSchema,
+  insertOrderFinanceSnapshotSchema,
+  type ProductEventType, type EventActorType, type UserActivityType, type UserFlagKey, type BonusTransactionType
 } from "@shared/schema";
 import { z } from "zod";
 import { L } from "./localization-keys";
 import { sendLocalizedSuccess } from "./i18n";
+
+function getQueryParam(req: Request, key: string): string | undefined {
+  const value = req.query[key];
+  if (Array.isArray(value)) return value[0] as string;
+  return value as string | undefined;
+}
+
+function getQueryParamBool(req: Request, key: string): boolean {
+  const value = getQueryParam(req, key);
+  return value === "true";
+}
 
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -813,6 +835,424 @@ export async function registerRoutes(
       message: { key: L.session.all_sessions_deleted } 
     });
   });
+
+  // ==================== V2 ENDPOINTS ====================
+
+  // Events
+  v1Router.post("/events", authMiddleware, async (req, res) => {
+    try {
+      const data = insertEventSchema.parse(req.body);
+      const event = await storage.createEvent(data);
+      res.status(201).json({ status: "success", data: event });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.get("/events", authMiddleware, requirePermissions("reports.read"), async (req, res) => {
+    const filters: { type?: ProductEventType; actorType?: EventActorType; actorId?: string; entityType?: string; entityId?: string; from?: string; to?: string } = {};
+    const type = getQueryParam(req, "type");
+    const actorType = getQueryParam(req, "actorType");
+    const actorId = getQueryParam(req, "actorId");
+    const entityType = getQueryParam(req, "entityType");
+    const entityId = getQueryParam(req, "entityId");
+    const from = getQueryParam(req, "from");
+    const to = getQueryParam(req, "to");
+    if (type) filters.type = type as ProductEventType;
+    if (actorType) filters.actorType = actorType as EventActorType;
+    if (actorId) filters.actorId = actorId;
+    if (entityType) filters.entityType = entityType;
+    if (entityId) filters.entityId = entityId;
+    if (from) filters.from = from;
+    if (to) filters.to = to;
+    const events = await storage.getEvents(filters);
+    res.json(events);
+  });
+
+  v1Router.get("/events/:id", authMiddleware, requirePermissions("reports.read"), async (req, res) => {
+    const event = await storage.getEvent(req.params.id);
+    if (!event) return sendError(res, 404, L.common.not_found);
+    res.json(event);
+  });
+
+  // Meta endpoints for v2 enums
+  v1Router.get("/meta/event-types", (_req, res) => {
+    res.json(productEventTypes.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/event-actor-types", (_req, res) => {
+    res.json(eventActorTypes.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/activity-types", (_req, res) => {
+    res.json(userActivityTypes.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/user-flag-keys", (_req, res) => {
+    res.json(userFlagKeys.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/bonus-transaction-types", (_req, res) => {
+    res.json(bonusTransactionTypes.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/bonus-reasons", (_req, res) => {
+    res.json(bonusReasons.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/subscription-statuses", (_req, res) => {
+    res.json(subscriptionStatuses.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/subscription-rule-types", (_req, res) => {
+    res.json(subscriptionRuleTypes.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/partner-categories", (_req, res) => {
+    res.json(partnerCategories.map(code => ({ code })));
+  });
+
+  v1Router.get("/meta/partner-statuses", (_req, res) => {
+    res.json(partnerStatuses.map(code => ({ code })));
+  });
+
+  // User Activity
+  v1Router.post("/users/:id/activity", authMiddleware, async (req, res) => {
+    try {
+      const userId = req.params.id;
+      if (req.user!.id !== userId && req.user!.type !== "staff") {
+        return sendError(res, 403, L.common.forbidden);
+      }
+      const data = insertUserActivitySchema.parse(req.body);
+      const activity = await storage.createUserActivity(userId, data);
+      res.status(201).json({ status: "success", data: activity });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.get("/users/:id/activity", authMiddleware, async (req, res) => {
+    const userId = req.params.id;
+    if (req.user!.id !== userId && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    const filters: { eventType?: UserActivityType; from?: string; to?: string } = {};
+    const eventType = getQueryParam(req, "eventType");
+    const from = getQueryParam(req, "from");
+    const to = getQueryParam(req, "to");
+    if (eventType) filters.eventType = eventType as UserActivityType;
+    if (from) filters.from = from;
+    if (to) filters.to = to;
+    const activities = await storage.getUserActivities(userId, filters);
+    res.json(activities);
+  });
+
+  v1Router.get("/users/:id/activity/summary", authMiddleware, async (req, res) => {
+    const userId = req.params.id;
+    if (req.user!.id !== userId && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    const summary = await storage.getUserActivitySummary(userId);
+    res.json(summary);
+  });
+
+  // User Flags
+  v1Router.get("/users/:id/flags", authMiddleware, requirePermissions("users.read"), async (req, res) => {
+    const flags = await storage.getUserFlags(req.params.id);
+    res.json(flags);
+  });
+
+  v1Router.post("/users/:id/flags", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    try {
+      const data = insertUserFlagSchema.parse(req.body);
+      const flag = await storage.setUserFlag(req.params.id, data);
+      res.status(201).json({ status: "success", data: flag });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.delete("/users/:id/flags/:key", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const deleted = await storage.deleteUserFlag(req.params.id, req.params.key as UserFlagKey);
+    if (!deleted) return sendError(res, 404, L.common.not_found);
+    res.status(204).send();
+  });
+
+  v1Router.get("/flags/:key/users", authMiddleware, requirePermissions("users.read"), async (req, res) => {
+    const valueParam = getQueryParam(req, "value");
+    const value = valueParam === "false" ? false : true;
+    const userIds = await storage.getUsersByFlag(req.params.key as UserFlagKey, value);
+    res.json(userIds);
+  });
+
+  // Bonus System
+  v1Router.get("/bonus/accounts/:userId", authMiddleware, async (req, res) => {
+    const userId = req.params.userId;
+    if (req.user!.id !== userId && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    const account = await storage.getBonusAccount(userId);
+    res.json(account);
+  });
+
+  v1Router.post("/bonus/transactions", authMiddleware, requirePermissions("payments.read"), async (req, res) => {
+    try {
+      const { userId, ...transactionData } = req.body;
+      const data = insertBonusTransactionSchema.parse(transactionData);
+      const transaction = await storage.createBonusTransaction(userId, data);
+      res.status(201).json({ status: "success", data: transaction });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.get("/bonus/transactions/:userId", authMiddleware, async (req, res) => {
+    const userId = req.params.userId;
+    if (req.user!.id !== userId && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    const filters: { type?: BonusTransactionType; from?: string; to?: string } = {};
+    const type = getQueryParam(req, "type");
+    const from = getQueryParam(req, "from");
+    const to = getQueryParam(req, "to");
+    if (type) filters.type = type as BonusTransactionType;
+    if (from) filters.from = from;
+    if (to) filters.to = to;
+    const transactions = await storage.getBonusTransactions(userId, filters);
+    res.json(transactions);
+  });
+
+  // Subscriptions
+  v1Router.get("/subscriptions", authMiddleware, async (req, res) => {
+    if (req.user!.type === "staff") {
+      // Staff can see all (would need pagination in production)
+      const userId = getQueryParam(req, "userId") || "";
+      const allSubs = await storage.getSubscriptionsByUser(userId);
+      return res.json(allSubs);
+    }
+    const subscriptions = await storage.getSubscriptionsByUser(req.user!.id);
+    res.json(subscriptions);
+  });
+
+  v1Router.get("/subscriptions/:id", authMiddleware, async (req, res) => {
+    const subscription = await storage.getSubscription(req.params.id);
+    if (!subscription) return sendError(res, 404, L.common.not_found);
+    if (subscription.userId !== req.user!.id && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    res.json(subscription);
+  });
+
+  v1Router.post("/subscriptions", authMiddleware, async (req, res) => {
+    try {
+      const data = insertSubscriptionSchema.parse(req.body);
+      const subscription = await storage.createSubscription(req.user!.id, data);
+      res.status(201).json({ status: "success", data: subscription });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.patch("/subscriptions/:id", authMiddleware, async (req, res) => {
+    const subscription = await storage.getSubscription(req.params.id);
+    if (!subscription) return sendError(res, 404, L.common.not_found);
+    if (subscription.userId !== req.user!.id && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    try {
+      const data = updateSubscriptionSchema.parse(req.body);
+      const updated = await storage.updateSubscription(req.params.id, data);
+      res.json({ status: "success", data: updated });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.get("/subscriptions/:id/rules", authMiddleware, async (req, res) => {
+    const subscription = await storage.getSubscription(req.params.id);
+    if (!subscription) return sendError(res, 404, L.common.not_found);
+    if (subscription.userId !== req.user!.id && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    const rules = await storage.getSubscriptionRules(req.params.id);
+    res.json(rules);
+  });
+
+  v1Router.post("/subscriptions/:id/rules", authMiddleware, async (req, res) => {
+    const subscription = await storage.getSubscription(req.params.id);
+    if (!subscription) return sendError(res, 404, L.common.not_found);
+    if (subscription.userId !== req.user!.id && req.user!.type !== "staff") {
+      return sendError(res, 403, L.common.forbidden);
+    }
+    try {
+      const data = insertSubscriptionRuleSchema.parse(req.body);
+      const rule = await storage.createSubscriptionRule(req.params.id, data);
+      res.status(201).json({ status: "success", data: rule });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.delete("/subscriptions/rules/:ruleId", authMiddleware, async (req, res) => {
+    const deleted = await storage.deleteSubscriptionRule(req.params.ruleId);
+    if (!deleted) return sendError(res, 404, L.common.not_found);
+    res.status(204).send();
+  });
+
+  // Subscription Plans
+  v1Router.get("/subscription-plans", async (_req, res) => {
+    const plans = await storage.getSubscriptionPlans(true);
+    res.json(plans);
+  });
+
+  v1Router.get("/subscription-plans/:id", async (req, res) => {
+    const plan = await storage.getSubscriptionPlan(req.params.id);
+    if (!plan) return sendError(res, 404, L.common.not_found);
+    res.json(plan);
+  });
+
+  v1Router.post("/subscription-plans", authMiddleware, requirePermissions("subscriptions.manage"), async (req, res) => {
+    try {
+      const data = insertSubscriptionPlanSchema.parse(req.body);
+      const plan = await storage.createSubscriptionPlan(data);
+      res.status(201).json({ status: "success", data: plan });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.patch("/subscription-plans/:id", authMiddleware, requirePermissions("subscriptions.manage"), async (req, res) => {
+    const updated = await storage.updateSubscriptionPlan(req.params.id, req.body);
+    if (!updated) return sendError(res, 404, L.common.not_found);
+    res.json({ status: "success", data: updated });
+  });
+
+  // Partners
+  v1Router.get("/partners", async (req, res) => {
+    const filters: { category?: string; status?: string } = {};
+    const category = getQueryParam(req, "category");
+    const status = getQueryParam(req, "status");
+    if (category) filters.category = category;
+    if (status) filters.status = status;
+    const partners = await storage.getPartners(filters);
+    res.json(partners);
+  });
+
+  v1Router.get("/partners/:id", async (req, res) => {
+    const partner = await storage.getPartner(req.params.id);
+    if (!partner) return sendError(res, 404, L.common.not_found);
+    res.json(partner);
+  });
+
+  v1Router.post("/partners", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    try {
+      const data = insertPartnerSchema.parse(req.body);
+      const partner = await storage.createPartner(data);
+      res.status(201).json({ status: "success", data: partner });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.patch("/partners/:id", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const updated = await storage.updatePartner(req.params.id, req.body);
+    if (!updated) return sendError(res, 404, L.common.not_found);
+    res.json({ status: "success", data: updated });
+  });
+
+  // Partner Offers
+  v1Router.get("/partners/:id/offers", async (req, res) => {
+    const activeOnly = getQueryParamBool(req, "activeOnly");
+    const offers = await storage.getPartnerOffers(req.params.id, activeOnly);
+    res.json(offers);
+  });
+
+  v1Router.post("/partners/:id/offers", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    try {
+      const data = insertPartnerOfferSchema.parse(req.body);
+      const offer = await storage.createPartnerOffer(req.params.id, data);
+      res.status(201).json({ status: "success", data: offer });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.get("/partner-offers", async (req, res) => {
+    const segmentsParam = getQueryParam(req, "segments");
+    const segments = segmentsParam ? segmentsParam.split(",") : [];
+    const offers = await storage.getOffersForSegments(segments);
+    res.json(offers);
+  });
+
+  v1Router.get("/partner-offers/:id", async (req, res) => {
+    const offer = await storage.getPartnerOffer(req.params.id);
+    if (!offer) return sendError(res, 404, L.common.not_found);
+    res.json(offer);
+  });
+
+  v1Router.patch("/partner-offers/:id", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const updated = await storage.updatePartnerOffer(req.params.id, req.body);
+    if (!updated) return sendError(res, 404, L.common.not_found);
+    res.json({ status: "success", data: updated });
+  });
+
+  // Order Finance Snapshots
+  v1Router.get("/orders/:id/finance", authMiddleware, requirePermissions("payments.read"), async (req, res) => {
+    const snapshot = await storage.getOrderFinanceSnapshot(req.params.id);
+    if (!snapshot) return sendError(res, 404, L.common.not_found);
+    res.json(snapshot);
+  });
+
+  v1Router.post("/orders/:id/finance", authMiddleware, requirePermissions("payments.read"), async (req, res) => {
+    try {
+      const data = insertOrderFinanceSnapshotSchema.parse(req.body);
+      const snapshot = await storage.createOrderFinanceSnapshot(req.params.id, data);
+      res.status(201).json({ status: "success", data: snapshot });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return sendError(res, 400, L.common.validation_error, { details: err.errors[0].message });
+      }
+      return sendError(res, 500, L.common.internal_error);
+    }
+  });
+
+  v1Router.patch("/orders/:id/finance", authMiddleware, requirePermissions("payments.read"), async (req, res) => {
+    const updated = await storage.updateOrderFinanceSnapshot(req.params.id, req.body);
+    if (!updated) return sendError(res, 404, L.common.not_found);
+    res.json({ status: "success", data: updated });
+  });
+
+  // ==================== END V2 ENDPOINTS ====================
 
   v1Router.get("/openapi.json", (_req, res) => {
     try {
