@@ -9,6 +9,19 @@ export type UserStatus = (typeof userStatuses)[number];
 export const orderStatuses = ["created", "scheduled", "assigned", "in_progress", "completed", "cancelled"] as const;
 export type OrderStatus = (typeof orderStatuses)[number];
 
+export const orderStatusTransitions: Record<OrderStatus, OrderStatus[]> = {
+  created: ["scheduled", "assigned", "cancelled"],
+  scheduled: ["assigned", "cancelled"],
+  assigned: ["in_progress", "cancelled"],
+  in_progress: ["completed", "cancelled"],
+  completed: [],
+  cancelled: [],
+};
+
+export function isValidStatusTransition(from: OrderStatus, to: OrderStatus): boolean {
+  return orderStatusTransitions[from].includes(to);
+}
+
 export const availabilityStatuses = ["available", "busy", "offline"] as const;
 export type AvailabilityStatus = (typeof availabilityStatuses)[number];
 

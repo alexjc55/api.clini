@@ -1,13 +1,23 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
-import { generateTokens, refreshAccessToken } from "./auth";
+import { generateTokens, refreshAccessToken, revokeUserTokens } from "./auth";
 import { authMiddleware, requirePermissions, requireUserType, sendError } from "./middleware";
 import {
   insertUserSchema, loginSchema, insertAddressSchema, insertOrderSchema,
-  updateOrderSchema, updateCourierProfileSchema, insertRoleSchema, orderStatuses
+  updateOrderSchema, updateCourierProfileSchema, insertRoleSchema, orderStatuses,
+  isValidStatusTransition, type OrderStatus
 } from "@shared/schema";
 import { z } from "zod";
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: { code: "RATE_LIMIT", message: "Too many attempts, please try again later" } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export async function registerRoutes(
   httpServer: Server,
@@ -16,7 +26,7 @@ export async function registerRoutes(
   
   await storage.initDefaults();
 
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", authRateLimiter, async (req, res) => {
     try {
       const data = insertUserSchema.parse(req.body);
       
@@ -37,7 +47,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", authRateLimiter, async (req, res) => {
     try {
       const data = loginSchema.parse(req.body);
       
@@ -60,7 +70,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/refresh", async (req, res) => {
+  app.post("/api/auth/refresh", authRateLimiter, async (req, res) => {
     try {
       const { refreshToken } = req.body;
       if (!refreshToken) {
@@ -116,10 +126,20 @@ export async function registerRoutes(
   });
 
   app.patch("/api/users/:id", authMiddleware, requirePermissions("users.manage"), async (req, res) => {
+    const existingUser = await storage.getUser(req.params.id);
+    if (!existingUser) {
+      return sendError(res, 404, "NOT_FOUND", "User not found");
+    }
+    
     const user = await storage.updateUser(req.params.id, req.body);
     if (!user) {
       return sendError(res, 404, "NOT_FOUND", "User not found");
     }
+    
+    if (req.body.status === "blocked" && existingUser.status !== "blocked") {
+      revokeUserTokens(user.id);
+    }
+    
     const { passwordHash, ...userData } = user;
     res.json(userData);
   });
@@ -266,6 +286,11 @@ export async function registerRoutes(
       }
       
       const data = updateOrderSchema.parse(req.body);
+      
+      if (data.status && !isValidStatusTransition(order.status, data.status)) {
+        return sendError(res, 409, "CONFLICT", `Cannot transition from '${order.status}' to '${data.status}'`);
+      }
+      
       const updated = await storage.updateOrder(req.params.id, data, req.user!.id);
       res.json(updated);
     } catch (err) {

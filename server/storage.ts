@@ -99,6 +99,13 @@ export class MemStorage implements IStorage {
       await this.createCourierProfile(id);
     }
 
+    if (insertUser.type === "staff") {
+      const adminRole = await this.getRoleByName("admin");
+      if (adminRole) {
+        await this.addUserRole(id, adminRole.id);
+      }
+    }
+
     return user;
   }
 
