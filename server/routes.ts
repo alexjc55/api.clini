@@ -316,16 +316,22 @@ export async function registerRoutes(
   });
 
   v1Router.delete("/addresses/:id", authMiddleware, async (req, res) => {
-    const address = await storage.getAddress(req.params.id);
+    const address = await storage.getAddress(req.params.id as string, true);
     if (!address) {
-      return sendError(res, 404, L.address.not_found, { addressId: req.params.id });
+      return sendError(res, 404, L.address.not_found, { addressId: req.params.id as string });
+    }
+    if (address.deletedAt) {
+      return sendError(res, 400, L.address.already_deleted, { addressId: req.params.id as string });
     }
     if (address.userId !== req.user!.id && !req.userPermissions?.includes("addresses.manage")) {
       return sendError(res, 403, L.address.forbidden);
     }
     
-    await storage.deleteAddress(req.params.id);
-    res.status(204).send();
+    await storage.softDeleteAddress(req.params.id as string);
+    res.json({
+      status: "success",
+      message: { key: L.address.deleted, params: { addressId: req.params.id } }
+    });
   });
 
   v1Router.post("/orders", authMiddleware, async (req, res) => {

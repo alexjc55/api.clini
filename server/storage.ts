@@ -6,6 +6,9 @@ import type {
   Order, InsertOrder, UpdateOrder, OrderEvent, InsertOrderEvent,
   UserType, UserStatus, OrderStatus, AuditLog, Session
 } from "@shared/schema";
+import { IStorage } from "./repositories";
+
+export type { IStorage };
 
 async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
@@ -13,69 +16,6 @@ async function hashPassword(password: string): Promise<string> {
 
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
-}
-
-export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByPhone(phone: string, includeDeleted?: boolean): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
-  softDeleteUser(id: string): Promise<User | undefined>;
-  getUsers(filters?: { type?: UserType; status?: UserStatus; includeDeleted?: boolean }): Promise<User[]>;
-  verifyUserPassword(phone: string, password: string): Promise<User | undefined>;
-
-  getRole(id: string): Promise<Role | undefined>;
-  getRoleByName(name: string): Promise<Role | undefined>;
-  getRoles(): Promise<Role[]>;
-  createRole(role: InsertRole): Promise<Role>;
-
-  getPermission(id: string): Promise<Permission | undefined>;
-  getPermissions(): Promise<Permission[]>;
-  createPermission(permission: InsertPermission): Promise<Permission>;
-
-  getRolePermissions(roleId: string): Promise<Permission[]>;
-  addRolePermission(roleId: string, permissionId: string): Promise<void>;
-
-  getUserRoles(userId: string): Promise<Role[]>;
-  getUserPermissions(userId: string): Promise<string[]>;
-  addUserRole(userId: string, roleId: string): Promise<void>;
-  setUserRoles(userId: string, roleIds: string[]): Promise<void>;
-
-  getAddress(id: string): Promise<Address | undefined>;
-  getAddressesByUser(userId: string): Promise<Address[]>;
-  createAddress(userId: string, address: InsertAddress): Promise<Address>;
-  updateAddress(id: string, updates: Partial<Address>): Promise<Address | undefined>;
-  deleteAddress(id: string): Promise<boolean>;
-
-  getCourierProfile(courierId: string, includeDeleted?: boolean): Promise<CourierProfile | undefined>;
-  getCouriers(includeDeleted?: boolean): Promise<CourierProfile[]>;
-  createCourierProfile(courierId: string): Promise<CourierProfile>;
-  updateCourierProfile(courierId: string, updates: UpdateCourierProfile): Promise<CourierProfile | undefined>;
-  updateCourierVerification(courierId: string, status: "verified" | "rejected"): Promise<CourierProfile | undefined>;
-  softDeleteCourier(courierId: string): Promise<CourierProfile | undefined>;
-  incrementCourierOrders(courierId: string): Promise<void>;
-
-  getOrder(id: string, includeDeleted?: boolean): Promise<Order | undefined>;
-  getOrders(filters?: { clientId?: string; courierId?: string; status?: OrderStatus; includeDeleted?: boolean }): Promise<Order[]>;
-  createOrder(clientId: string, order: InsertOrder): Promise<Order>;
-  updateOrder(id: string, updates: UpdateOrder, performedBy: string): Promise<Order | undefined>;
-  assignCourier(orderId: string, courierId: string, performedBy: string): Promise<Order | undefined>;
-  softDeleteOrder(orderId: string): Promise<Order | undefined>;
-
-  getOrderEvents(orderId: string): Promise<OrderEvent[]>;
-  createOrderEvent(performedBy: string, event: InsertOrderEvent): Promise<OrderEvent>;
-
-  createAuditLog(log: Omit<AuditLog, "id" | "createdAt">): Promise<AuditLog>;
-  getAuditLogs(filters?: { userId?: string; entity?: string; entityId?: string; action?: string }): Promise<AuditLog[]>;
-
-  createSession(userId: string, refreshToken: string, deviceId: string, platform: "ios" | "android" | "web", userAgent: string | null): Promise<Session>;
-  getSession(refreshToken: string): Promise<Session | undefined>;
-  getUserSessions(userId: string): Promise<Session[]>;
-  updateSessionLastSeen(sessionId: string): Promise<void>;
-  deleteSession(sessionId: string): Promise<boolean>;
-  deleteUserSessions(userId: string): Promise<void>;
-
-  initDefaults(): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -238,12 +178,19 @@ export class MemStorage implements IStorage {
     this.userRoles.set(userId, new Set(roleIds));
   }
 
-  async getAddress(id: string): Promise<Address | undefined> {
-    return this.addresses.get(id);
+  async getAddress(id: string, includeDeleted = false): Promise<Address | undefined> {
+    const address = this.addresses.get(id);
+    if (!address) return undefined;
+    if (!includeDeleted && address.deletedAt) return undefined;
+    return address;
   }
 
-  async getAddressesByUser(userId: string): Promise<Address[]> {
-    return Array.from(this.addresses.values()).filter(a => a.userId === userId);
+  async getAddressesByUser(userId: string, includeDeleted = false): Promise<Address[]> {
+    let addresses = Array.from(this.addresses.values()).filter(a => a.userId === userId);
+    if (!includeDeleted) {
+      addresses = addresses.filter(a => !a.deletedAt);
+    }
+    return addresses;
   }
 
   async createAddress(userId: string, address: InsertAddress): Promise<Address> {
@@ -257,7 +204,8 @@ export class MemStorage implements IStorage {
       apartment: address.apartment || null,
       floor: address.floor || null,
       hasElevator: address.hasElevator || false,
-      comment: address.comment || null
+      comment: address.comment || null,
+      deletedAt: null
     };
     this.addresses.set(id, newAddress);
     return newAddress;
@@ -265,14 +213,18 @@ export class MemStorage implements IStorage {
 
   async updateAddress(id: string, updates: Partial<Address>): Promise<Address | undefined> {
     const address = this.addresses.get(id);
-    if (!address) return undefined;
+    if (!address || address.deletedAt) return undefined;
     const updated = { ...address, ...updates };
     this.addresses.set(id, updated);
     return updated;
   }
 
-  async deleteAddress(id: string): Promise<boolean> {
-    return this.addresses.delete(id);
+  async softDeleteAddress(id: string): Promise<Address | undefined> {
+    const address = this.addresses.get(id);
+    if (!address) return undefined;
+    address.deletedAt = new Date().toISOString();
+    this.addresses.set(id, address);
+    return address;
   }
 
   async getCourierProfile(courierId: string, includeDeleted = false): Promise<CourierProfile | undefined> {
@@ -517,7 +469,8 @@ export class MemStorage implements IStorage {
   }
 
   async deleteUserSessions(userId: string): Promise<void> {
-    for (const [id, session] of this.sessions.entries()) {
+    const entries = Array.from(this.sessions.entries());
+    for (const [id, session] of entries) {
       if (session.userId === userId) {
         this.sessions.delete(id);
       }

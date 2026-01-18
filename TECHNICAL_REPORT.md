@@ -104,7 +104,7 @@ Accept-Language: he | ru | ar | en
 | **User** | id, type, phone, email, passwordHash, status, createdAt, `deletedAt` | ✅ |
 | **Order** | id, clientId, courierId, addressId, scheduledAt, timeWindow, status, price, createdAt, completedAt, `deletedAt` | ✅ |
 | **CourierProfile** | courierId, availabilityStatus, rating, completedOrdersCount, verificationStatus, `deletedAt` | ✅ |
-| **Address** | id, userId, city, street, house, apartment, floor, hasElevator, comment | ❌ |
+| **Address** | id, userId, city, street, house, apartment, floor, hasElevator, comment, `deletedAt` | ✅ |
 | **Role** | id, name, description | ❌ |
 | **Permission** | id, name, description | ❌ |
 | **Session** | id, userId, refreshToken, deviceId, platform, userAgent, lastSeenAt, createdAt | ❌ |
@@ -183,6 +183,7 @@ addresses.read, addresses.manage
 - `User` — поле `deletedAt`
 - `Order` — поле `deletedAt`
 - `CourierProfile` — поле `deletedAt`
+- `Address` — поле `deletedAt` (сохраняет историю для заказов/бухгалтерии)
 
 **Фильтрация:**
 - По умолчанию удалённые сущности **скрыты**
@@ -435,13 +436,16 @@ common.rate_limit_exceeded, common.missing_permission, common.invalid_user_type
 │   └── src/
 │       └── pages/
 │           └── api-docs.tsx    # Интерактивная документация (EN/RU)
+├── docs/
+│   └── POSTGRESQL_MIGRATION.md # Руководство по миграции на PostgreSQL
 ├── server/
 │   ├── auth.ts                 # JWT аутентификация
 │   ├── i18n.ts                 # i18n middleware
 │   ├── localization-keys.ts    # Каталог i18n ключей
 │   ├── middleware.ts           # RBAC middleware
-│   ├── routes.ts               # API endpoints (~780 строк)
-│   └── storage.ts              # In-memory хранилище
+│   ├── repositories.ts         # Repository interfaces (IUserRepository, IOrderRepository, etc.)
+│   ├── routes.ts               # API endpoints (~790 строк)
+│   └── storage.ts              # In-memory хранилище (implements IStorage)
 ├── shared/
 │   └── schema.ts               # Типы, схемы Zod, константы
 └── replit.md                   # Документация проекта

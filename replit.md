@@ -101,6 +101,7 @@ Accept-Language: he | ru | ar | en
 - `User` — `deletedAt` поле
 - `Order` — `deletedAt` поле  
 - `CourierProfile` — `deletedAt` поле
+- `Address` — `deletedAt` поле (для истории заказов)
 
 Фильтрация:
 - По умолчанию удалённые сущности скрыты
@@ -170,13 +171,16 @@ session.all_sessions_deleted
 │   └── src/
 │       └── pages/
 │           └── api-docs.tsx  # Интерактивная документация
+├── docs/
+│   └── POSTGRESQL_MIGRATION.md  # Руководство по миграции на PostgreSQL
 ├── server/
 │   ├── auth.ts            # JWT аутентификация
 │   ├── i18n.ts            # i18n middleware (Accept-Language)
 │   ├── localization-keys.ts # Каталог ключей локализации
 │   ├── middleware.ts      # RBAC middleware
+│   ├── repositories.ts    # Repository interfaces (для миграции на PostgreSQL)
 │   ├── routes.ts          # API endpoints
-│   └── storage.ts         # In-memory хранилище
+│   └── storage.ts         # In-memory хранилище (implements IStorage)
 └── shared/
     └── schema.ts          # Типы и схемы данных
 ```

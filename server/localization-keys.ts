@@ -62,6 +62,7 @@ export const LOCALIZATION_KEYS = {
   },
   address: {
     not_found: "address.not_found",
+    already_deleted: "address.already_deleted",
     created: "address.created",
     updated: "address.updated",
     deleted: "address.deleted",

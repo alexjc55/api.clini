@@ -129,6 +129,7 @@ export interface Address {
   floor: number | null;
   hasElevator: boolean;
   comment: string | null;
+  deletedAt: string | null;
 }
 
 export const insertAddressSchema = z.object({
