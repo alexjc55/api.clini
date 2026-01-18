@@ -151,6 +151,106 @@ const t = {
 
 const apiSections: ApiSection[] = [
   {
+    name: { en: "System", ru: "Системные" },
+    icon: Server,
+    description: { en: "Health check and metadata endpoints", ru: "Проверка состояния и метаданные" },
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/v1/health",
+        summary: { en: "Health check", ru: "Проверка работоспособности" },
+        description: { en: "Returns API health status and current timestamp", ru: "Возвращает статус API и текущее время" },
+        auth: false,
+        responseExample: {
+          status: "ok",
+          timestamp: "2026-01-18T10:30:00.000Z"
+        }
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/order-statuses",
+        summary: { en: "Order statuses list", ru: "Список статусов заказа" },
+        description: { en: "Returns all possible order statuses for UI rendering", ru: "Возвращает все возможные статусы заказа для отображения в UI" },
+        auth: false,
+        responseExample: [
+          { code: "created" },
+          { code: "scheduled" },
+          { code: "assigned" },
+          { code: "in_progress" },
+          { code: "completed" },
+          { code: "cancelled" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/user-types",
+        summary: { en: "User types list", ru: "Список типов пользователей" },
+        description: { en: "Returns all possible user types", ru: "Возвращает все возможные типы пользователей" },
+        auth: false,
+        responseExample: [
+          { code: "client" },
+          { code: "courier" },
+          { code: "staff" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/user-statuses",
+        summary: { en: "User statuses list", ru: "Список статусов пользователей" },
+        description: { en: "Returns all possible user statuses", ru: "Возвращает все возможные статусы пользователей" },
+        auth: false,
+        responseExample: [
+          { code: "active" },
+          { code: "blocked" },
+          { code: "pending" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/availability-statuses",
+        summary: { en: "Courier availability statuses", ru: "Статусы доступности курьера" },
+        description: { en: "Returns courier availability status options", ru: "Возвращает варианты статуса доступности курьера" },
+        auth: false,
+        responseExample: [
+          { code: "available" },
+          { code: "busy" },
+          { code: "offline" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/verification-statuses",
+        summary: { en: "Verification statuses list", ru: "Список статусов верификации" },
+        description: { en: "Returns courier verification status options", ru: "Возвращает варианты статуса верификации курьера" },
+        auth: false,
+        responseExample: [
+          { code: "pending" },
+          { code: "verified" },
+          { code: "rejected" }
+        ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/order-event-types",
+        summary: { en: "Order event types", ru: "Типы событий заказа" },
+        description: { en: "Returns all order event types for history tracking", ru: "Возвращает все типы событий заказа для истории" },
+        auth: false,
+        responseExample: [
+          { code: "created" },
+          { code: "scheduled" },
+          { code: "assigned" },
+          { code: "started" },
+          { code: "completed" },
+          { code: "cancelled" },
+          { code: "status_changed" },
+          { code: "courier_changed" },
+          { code: "price_changed" },
+          { code: "note_added" }
+        ]
+      }
+    ]
+  },
+  {
     name: { en: "Authentication", ru: "Аутентификация" },
     icon: Key,
     description: { en: "JWT access/refresh tokens, registration and login", ru: "JWT access/refresh токены, регистрация и авторизация" },
