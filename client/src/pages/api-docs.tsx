@@ -87,7 +87,35 @@ const t = {
     downloadJson: "JSON",
     downloadYaml: "YAML",
     corsTitle: "CORS Configuration",
-    corsDesc: "Set ALLOWED_ORIGINS environment variable for cross-origin requests"
+    corsDesc: "Set ALLOWED_ORIGINS environment variable for cross-origin requests",
+    requestTrackingTitle: "Request Tracking",
+    requestTrackingDesc: "All requests include X-Request-Id header for debugging and support",
+    requestTrackingPoints: [
+      "If client sends X-Request-Id, it's preserved",
+      "If not provided, server generates UUID v4",
+      "Always returned in response header"
+    ],
+    idempotencyTitle: "Idempotency",
+    idempotencyDesc: "POST endpoints support Idempotency-Key header to prevent duplicate requests",
+    idempotencyPoints: [
+      "Protected endpoints: POST /orders, POST /bonus/transactions",
+      "Response cached for 24 hours",
+      "Duplicate requests return cached response",
+      "Header X-Idempotency-Replayed: true indicates replay"
+    ],
+    paginationTitle: "Pagination",
+    paginationDesc: "List endpoints return paginated responses",
+    paginationFormat: "Response Format",
+    paginationParams: "Query Parameters: ?page=1&perPage=20",
+    paginatedEndpoints: [
+      "GET /users",
+      "GET /orders",
+      "GET /audit-logs",
+      "GET /events",
+      "GET /bonus/transactions/:userId"
+    ],
+    clientTypesTitle: "Client Types",
+    clientTypesDesc: "OAuth-ready client identification for session tracking"
   },
   ru: {
     title: "Waste Collection API",
@@ -145,7 +173,35 @@ const t = {
     downloadJson: "JSON",
     downloadYaml: "YAML",
     corsTitle: "Настройка CORS",
-    corsDesc: "Установите переменную окружения ALLOWED_ORIGINS для кросс-доменных запросов"
+    corsDesc: "Установите переменную окружения ALLOWED_ORIGINS для кросс-доменных запросов",
+    requestTrackingTitle: "Отслеживание запросов",
+    requestTrackingDesc: "Все запросы включают заголовок X-Request-Id для отладки и поддержки",
+    requestTrackingPoints: [
+      "Если клиент отправляет X-Request-Id, он сохраняется",
+      "Если не указан, сервер генерирует UUID v4",
+      "Всегда возвращается в заголовке ответа"
+    ],
+    idempotencyTitle: "Идемпотентность",
+    idempotencyDesc: "POST endpoints поддерживают заголовок Idempotency-Key для предотвращения дублирования",
+    idempotencyPoints: [
+      "Защищённые endpoints: POST /orders, POST /bonus/transactions",
+      "Ответ кешируется на 24 часа",
+      "Повторные запросы возвращают кешированный ответ",
+      "Заголовок X-Idempotency-Replayed: true указывает на повтор"
+    ],
+    paginationTitle: "Пагинация",
+    paginationDesc: "List endpoints возвращают пагинированные ответы",
+    paginationFormat: "Формат ответа",
+    paginationParams: "Query параметры: ?page=1&perPage=20",
+    paginatedEndpoints: [
+      "GET /users",
+      "GET /orders",
+      "GET /audit-logs",
+      "GET /events",
+      "GET /bonus/transactions/:userId"
+    ],
+    clientTypesTitle: "Типы клиентов",
+    clientTypesDesc: "OAuth-ready идентификация клиентов для отслеживания сессий"
   }
 };
 
@@ -322,6 +378,20 @@ const apiSections: ApiSection[] = [
           { code: "laundry" },
           { code: "repair" }
         ]
+      },
+      {
+        method: "GET",
+        path: "/api/v1/meta/client-types",
+        summary: { en: "Client types (OAuth-ready)", ru: "Типы клиентов (OAuth-ready)" },
+        description: { en: "Returns client application types for session tracking", ru: "Возвращает типы клиентских приложений для отслеживания сессий" },
+        auth: false,
+        responseExample: [
+          { code: "mobile_client" },
+          { code: "courier_app" },
+          { code: "erp" },
+          { code: "partner" },
+          { code: "web" }
+        ]
       }
     ]
   },
@@ -352,9 +422,9 @@ const apiSections: ApiSection[] = [
         method: "POST",
         path: "/api/v1/auth/login",
         summary: { en: "User login", ru: "Авторизация пользователя" },
-        description: { en: "Returns JWT tokens on successful login. Creates device session.", ru: "Возвращает JWT токены при успешной авторизации. Создаёт сессию устройства." },
+        description: { en: "Returns JWT tokens on successful login. Creates device session with optional client metadata.", ru: "Возвращает JWT токены при успешной авторизации. Создаёт сессию устройства с опциональными метаданными клиента." },
         auth: false,
-        requestBody: { phone: "+79991234567", password: "securePassword123", deviceId: "device-123", platform: "ios | android | web" },
+        requestBody: { phone: "+79991234567", password: "securePassword123", deviceId: "device-123", platform: "ios | android | web", clientId: "my-app-v2", clientType: "mobile_client" },
         responseExample: {
           status: "success",
           message: { key: "auth.login_success", params: { userId: "uuid" } },
@@ -365,10 +435,10 @@ const apiSections: ApiSection[] = [
         method: "POST",
         path: "/api/v1/auth/refresh",
         summary: { en: "Refresh token", ru: "Обновление токена" },
-        description: { en: "Refreshes access token using refresh token. Updates lastSeenAt.", ru: "Обновляет access token используя refresh token. Обновляет lastSeenAt." },
+        description: { en: "Refreshes access token using refresh token. Updates lastSeenAt and optional client metadata.", ru: "Обновляет access token используя refresh token. Обновляет lastSeenAt и опциональные метаданные клиента." },
         auth: false,
-        requestBody: { refreshToken: "eyJhbGciOiJIUzI1NiIs..." },
-        responseExample: { accessToken: "eyJhbGciOiJIUzI1NiIs...", refreshToken: "eyJhbGciOiJIUzI1NiIs..." }
+        requestBody: { refreshToken: "eyJhbGciOiJIUzI1NiIs...", clientId: "my-app-v2", clientType: "mobile_client" },
+        responseExample: { status: "success", message: { key: "auth.refresh_success" }, data: { accessToken: "eyJhbGciOiJIUzI1NiIs...", refreshToken: "eyJhbGciOiJIUzI1NiIs..." } }
       },
       {
         method: "GET",
@@ -382,9 +452,9 @@ const apiSections: ApiSection[] = [
         method: "GET",
         path: "/api/v1/auth/sessions",
         summary: { en: "My active sessions", ru: "Мои активные сессии" },
-        description: { en: "List of all active sessions with device info", ru: "Список всех активных сессий пользователя с информацией об устройствах" },
+        description: { en: "List of all active sessions with device and client info", ru: "Список всех активных сессий с информацией об устройствах и клиентах" },
         auth: true,
-        responseExample: [{ id: "session-uuid", deviceId: "device-123", platform: "ios", lastSeenAt: "2026-01-15T10:30:00Z", createdAt: "2026-01-10T08:00:00Z" }]
+        responseExample: [{ id: "session-uuid", deviceId: "device-123", platform: "ios", clientId: "my-app-v2", clientType: "mobile_client", lastSeenAt: "2026-01-15T10:30:00Z", createdAt: "2026-01-10T08:00:00Z" }]
       },
       {
         method: "DELETE",
@@ -415,7 +485,7 @@ const apiSections: ApiSection[] = [
         description: { en: "Get list of all users. Filters: ?type, ?status, ?includeDeleted=true", ru: "Получение списка всех пользователей. Фильтры: ?type, ?status, ?includeDeleted=true" },
         auth: true,
         permissions: ["users.read"],
-        responseExample: { users: [{ id: "uuid", type: "client", phone: "+79991234567", status: "active", deletedAt: null }], total: 100, page: 1, limit: 20 }
+        responseExample: { data: [{ id: "uuid", type: "client", phone: "+79991234567", status: "active", deletedAt: null }], meta: { page: 1, perPage: 20, total: 100, hasNext: true } }
       },
       {
         method: "GET",
@@ -514,7 +584,7 @@ const apiSections: ApiSection[] = [
         description: { en: "Get orders list. Filters: ?status, ?includeDeleted=true (ERP only)", ru: "Получение списка заказов. Фильтры: ?status, ?includeDeleted=true (только ERP)" },
         auth: true,
         permissions: ["orders.read"],
-        responseExample: { orders: [{ id: "order-uuid", status: "assigned", scheduledAt: "2024-01-20T10:00:00Z", deletedAt: null }], total: 50 }
+        responseExample: { data: [{ id: "order-uuid", status: "assigned", scheduledAt: "2024-01-20T10:00:00Z", deletedAt: null }], meta: { page: 1, perPage: 20, total: 50, hasNext: true } }
       },
       {
         method: "GET",
@@ -1523,6 +1593,84 @@ export default function ApiDocs() {
               <ul className="list-disc list-inside space-y-1 ml-2">
                 {tr.modules.map((m, i) => <li key={i}>{m}</li>)}
               </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">{tr.requestTrackingTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{tr.requestTrackingDesc}</p>
+              <pre className="bg-muted p-3 rounded-md text-xs">X-Request-Id: 550e8400-e29b-41d4-a716-446655440000</pre>
+              <ul className="list-disc list-inside space-y-1 ml-2 text-sm text-muted-foreground">
+                {tr.requestTrackingPoints.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">{tr.idempotencyTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{tr.idempotencyDesc}</p>
+              <pre className="bg-muted p-3 rounded-md text-xs">Idempotency-Key: my-unique-request-123</pre>
+              <ul className="list-disc list-inside space-y-1 ml-2 text-sm text-muted-foreground">
+                {tr.idempotencyPoints.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">{tr.paginationTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{tr.paginationDesc}</p>
+              <div>
+                <h4 className="font-medium mb-2 text-sm">{tr.paginationFormat}</h4>
+                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+{`{
+  "data": [...],
+  "meta": {
+    "page": 1,
+    "perPage": 20,
+    "total": 134,
+    "hasNext": true
+  }
+}`}
+                </pre>
+              </div>
+              <p className="text-sm text-muted-foreground">{tr.paginationParams}</p>
+              <div className="flex flex-wrap gap-2">
+                {tr.paginatedEndpoints.map((e, i) => <Badge key={i} variant="outline">{e}</Badge>)}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="text-lg">{tr.clientTypesTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">{tr.clientTypesDesc}</p>
+              <div className="flex flex-wrap gap-2">
+                <Badge>mobile_client</Badge>
+                <Badge>courier_app</Badge>
+                <Badge>erp</Badge>
+                <Badge>partner</Badge>
+                <Badge>web</Badge>
+              </div>
+              <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+{`POST /auth/login
+{
+  "phone": "+79991234567",
+  "password": "...",
+  "clientId": "my-app-v2",
+  "clientType": "mobile_client"
+}`}
+              </pre>
             </CardContent>
           </Card>
         </main>

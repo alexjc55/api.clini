@@ -10,6 +10,7 @@ function Router() {
     <Switch>
       <Route path="/" component={ApiDocs} />
       <Route path="/docs" component={ApiDocs} />
+      <Route path="/api-docs" component={ApiDocs} />
     </Switch>
   );
 }
