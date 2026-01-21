@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from "crypto";
-import { storage } from "./storage";
+import { getCurrentStorage } from "./storage-factory";
 import type { Webhook, WebhookEventType } from "@shared/schema";
 
 export interface WebhookPayload {
@@ -37,6 +37,7 @@ export async function dispatchWebhook(
   let error: string | undefined;
   let success = false;
   
+  const storage = getCurrentStorage();
   const delivery = await storage.createWebhookDelivery(webhook.id, event, { ...payload } as Record<string, unknown>);
   
   const MAX_RETRIES = 3;
@@ -85,6 +86,7 @@ export async function dispatchEventToSubscribers(
   event: WebhookEventType,
   data: Record<string, unknown>
 ): Promise<void> {
+  const storage = getCurrentStorage();
   const webhooks = await storage.getWebhooksByEvent(event);
   
   for (const webhook of webhooks) {

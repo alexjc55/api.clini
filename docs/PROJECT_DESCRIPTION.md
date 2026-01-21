@@ -12,6 +12,39 @@ Waste Collection API is a centralized backend service designed for waste collect
 
 ---
 
+## Technical Overview
+
+**Current Version:** 1.0.0  
+**API Base URL:** `/api/v1/*`  
+**Database:** PostgreSQL via Drizzle ORM (35 tables)  
+**Storage:** Dual-mode (PostgreSQL production / In-memory development)  
+**Authentication:** JWT with access + refresh tokens  
+
+### Database Schema
+
+The API uses a comprehensive PostgreSQL database with 35 tables organized by domain:
+
+| Domain | Tables Count | Description |
+|--------|-------------|-------------|
+| Core | 6 | Users, roles, permissions, addresses |
+| Orders | 3 | Order lifecycle, events, financial snapshots |
+| Courier | 2 | Courier profiles, document verification |
+| Gamification | 7 | Levels, progress, streaks, features |
+| Bonus System | 2 | Accounts, transactions |
+| Subscriptions | 3 | Plans, rules, user subscriptions |
+| Partners | 2 | Partner profiles, offers |
+| Webhooks | 2 | Endpoints, delivery tracking |
+| System | 4 | Feature flags, sessions, audit, events |
+
+### Storage Architecture
+
+The API implements a storage factory pattern:
+- **Production:** Automatically uses PostgreSQL when `DATABASE_URL` is set
+- **Development:** Falls back to in-memory storage for quick prototyping
+- **Sandbox Mode:** Isolated transactional data via `X-Environment: sandbox` header
+
+---
+
 ## Key Capabilities
 
 ### User Management

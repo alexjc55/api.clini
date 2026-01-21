@@ -16,6 +16,18 @@ info:
     - **Feature Flags**: Глобальные флаги для постепенного раскатывания функций
     - **Sandbox Mode**: Изолированное тестовое окружение через `X-Environment: sandbox`
     - **Meta Caching**: Все `/meta/*` endpoints кэшируются (Cache-Control: max-age=300, ETag)
+    - **PostgreSQL Database**: 35 таблиц через Drizzle ORM с автоматическим fallback на in-memory storage
+    
+    ## База данных
+    API использует PostgreSQL через Drizzle ORM с 35 таблицами:
+    - Core: users, roles, permissions, addresses
+    - Orders: orders, order_events, order_finance_snapshots
+    - Gamification: levels, user_levels, user_progress, user_streaks
+    - Bonus: bonus_accounts, bonus_transactions
+    - Subscriptions: subscriptions, subscription_plans, subscription_rules
+    - Partners: partners, partner_offers
+    - Webhooks: webhooks, webhook_deliveries
+    - System: feature_flags, idempotency_records
     
     ## Аутентификация
     Все защищённые endpoints требуют заголовок:

@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
 import { verifyAccessToken, extractToken } from "./auth";
-import { storage } from "./storage";
+import { getCurrentStorage } from "./storage-factory";
 import type { User, EnvironmentMode } from "@shared/schema";
 import { L } from "./localization-keys";
 import { i18nMiddleware, sendLocalizedError } from "./i18n";
@@ -79,6 +79,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     return sendError(res, 401, L.auth.invalid_token);
   }
   
+  const storage = getCurrentStorage();
   const user = await storage.getUser(userId);
   if (!user) {
     return sendError(res, 401, L.user.not_found);

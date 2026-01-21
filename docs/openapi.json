@@ -1,0 +1,4877 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Waste Collection API",
+    "description": "REST API для сервиса выноса мусора / бытовых услуг.\n\n## Особенности\n- **i18n**: Поддержка языков `he`, `ru`, `ar`, `en` через заголовок `Accept-Language`\n- **RBAC**: Role & Permission Based Access Control\n- **Soft Delete**: User, Order, CourierProfile, Address с `?includeDeleted=true`\n- **Audit Logging**: Все staff-действия логируются\n- **JWT Auth**: Access + Refresh токены\n- **Idempotency**: POST-запросы поддерживают `Idempotency-Key` заголовок\n- **Request Tracking**: Все запросы имеют `X-Request-Id` для логирования\n- **Webhooks**: Real-time уведомления для партнёров с HMAC-SHA256 подписью\n- **Feature Flags**: Глобальные флаги для постепенного раскатывания функций\n- **Sandbox Mode**: Изолированное тестовое окружение через `X-Environment: sandbox`\n- **Meta Caching**: Все `/meta/*` endpoints кэшируются (Cache-Control: max-age=300, ETag)\n- **PostgreSQL Database**: 35 таблиц через Drizzle ORM с автоматическим fallback на in-memory storage\n\n## База данных\nAPI использует PostgreSQL через Drizzle ORM с 35 таблицами:\n- Core: users, roles, permissions, addresses\n- Orders: orders, order_events, order_finance_snapshots\n- Gamification: levels, user_levels, user_progress, user_streaks\n- Bonus: bonus_accounts, bonus_transactions\n- Subscriptions: subscriptions, subscription_plans, subscription_rules\n- Partners: partners, partner_offers\n- Webhooks: webhooks, webhook_deliveries\n- System: feature_flags, idempotency_records\n\n## Аутентификация\nВсе защищённые endpoints требуют заголовок:\n```\nAuthorization: Bearer <access_token>\n```\n\n## Стандартные заголовки\n| Header | Описание | Пример |\n|--------|----------|--------|\n| `X-Request-Id` | ID запроса для трассировки (генерируется если не передан) | `550e8400-e29b-41d4-a716-446655440000` |\n| `Idempotency-Key` | Ключ идемпотентности для POST (предотвращает дубли) | `uuid-v4` |\n| `Accept-Language` | Предпочитаемый язык ответа | `he`, `ru`, `ar`, `en` |\n| `X-Environment` | Режим окружения | `production`, `sandbox` |\n\n## Формат ошибок (Immutable Contract)\n```json\n{\n  \"error\": {\n    \"key\": \"order.not_found\",\n    \"params\": { \"orderId\": \"123\" }\n  }\n}\n```\n\n## Формат пагинации\n```json\n{\n  \"data\": [...],\n  \"meta\": {\n    \"page\": 1,\n    \"perPage\": 20,\n    \"total\": 134,\n    \"hasNext\": true\n  }\n}\n```\n",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "API Version 1"
+    },
+    {
+      "url": "/api",
+      "description": "Legacy (deprecated)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "system",
+      "description": "Системные endpoints (health, meta)"
+    },
+    {
+      "name": "auth",
+      "description": "Аутентификация и сессии"
+    },
+    {
+      "name": "users",
+      "description": "Управление пользователями (ERP)"
+    },
+    {
+      "name": "addresses",
+      "description": "Адреса клиентов"
+    },
+    {
+      "name": "orders",
+      "description": "Управление заказами"
+    },
+    {
+      "name": "courier",
+      "description": "Курьерский интерфейс"
+    },
+    {
+      "name": "roles",
+      "description": "Роли и права (ERP)"
+    },
+    {
+      "name": "audit",
+      "description": "Аудит лог (ERP)"
+    },
+    {
+      "name": "events",
+      "description": "Продуктовые события и аналитика (v2)"
+    },
+    {
+      "name": "activity",
+      "description": "Активность пользователей (v2)"
+    },
+    {
+      "name": "flags",
+      "description": "Флаги и сегментация пользователей (v2)"
+    },
+    {
+      "name": "bonus",
+      "description": "Бонусная система (v2)"
+    },
+    {
+      "name": "subscriptions",
+      "description": "Подписки и планы (v2)"
+    },
+    {
+      "name": "partners",
+      "description": "Партнёры и маркетплейс (v2)"
+    },
+    {
+      "name": "finance",
+      "description": "Финансовые снимки заказов (v2)"
+    },
+    {
+      "name": "levels",
+      "description": "Уровни и система прогресса (gamification)"
+    },
+    {
+      "name": "streaks",
+      "description": "Стрики для удержания пользователей (gamification)"
+    },
+    {
+      "name": "features",
+      "description": "Разблокировка функций (gamification)"
+    },
+    {
+      "name": "webhooks",
+      "description": "Вебхуки для партнёров и ERP"
+    },
+    {
+      "name": "system-flags",
+      "description": "Системные feature flags"
+    },
+    {
+      "name": "sandbox",
+      "description": "Sandbox режим для тестирования"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Healthcheck",
+        "description": "Проверка работоспособности API",
+        "responses": {
+          "200": {
+            "description": "API работает",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/order-statuses": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Список статусов заказа",
+        "description": "Возвращает список доступных статусов заказа.\n\n**Кэширование:**\n- `Cache-Control: public, max-age=300` (5 минут)\n- `ETag` для условных запросов\n- Используйте `If-None-Match` для эффективного polling\n",
+        "responses": {
+          "200": {
+            "description": "Список статусов",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=300"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "example": "\"bfb1df39efda0db5bf85df84b4bc71a1\""
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "created",
+                          "scheduled",
+                          "assigned",
+                          "in_progress",
+                          "completed",
+                          "cancelled"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified (при совпадении ETag)"
+          }
+        }
+      }
+    },
+    "/meta/user-types": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Список типов пользователей",
+        "responses": {
+          "200": {
+            "description": "Список типов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "client",
+                          "courier",
+                          "staff"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/user-statuses": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Список статусов пользователей",
+        "responses": {
+          "200": {
+            "description": "Список статусов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "active",
+                          "blocked",
+                          "pending"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/availability-statuses": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Список статусов доступности курьера",
+        "responses": {
+          "200": {
+            "description": "Список статусов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "available",
+                          "busy",
+                          "offline"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/verification-statuses": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Список статусов верификации",
+        "responses": {
+          "200": {
+            "description": "Список статусов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "verified",
+                          "rejected"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/order-event-types": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Список типов событий заказа",
+        "responses": {
+          "200": {
+            "description": "Список типов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "created",
+                          "scheduled",
+                          "assigned",
+                          "started",
+                          "completed",
+                          "cancelled",
+                          "status_changed",
+                          "courier_changed",
+                          "price_changed",
+                          "note_added"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/event-types": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Типы продуктовых событий (v2)",
+        "responses": {
+          "200": {
+            "description": "Список типов продуктовых событий для аналитики",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/activity-types": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Типы активности пользователей (v2)",
+        "responses": {
+          "200": {
+            "description": "Список типов активности",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/user-flag-keys": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Ключи флагов пользователей (v2)",
+        "responses": {
+          "200": {
+            "description": "Список доступных ключей флагов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/bonus-transaction-types": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Типы бонусных транзакций (v2)",
+        "responses": {
+          "200": {
+            "description": "Список типов транзакций",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "earn",
+                          "spend",
+                          "expire",
+                          "adjust"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/subscription-statuses": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Статусы подписок (v2)",
+        "responses": {
+          "200": {
+            "description": "Список статусов подписок",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "active",
+                          "paused",
+                          "cancelled"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/partner-categories": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Категории партнёров (v2)",
+        "responses": {
+          "200": {
+            "description": "Список категорий партнёров",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/level-codes": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Коды уровней (gamification)",
+        "responses": {
+          "200": {
+            "description": "Список кодов уровней",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "bronze",
+                          "silver",
+                          "gold",
+                          "platinum"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/progress-reasons": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Причины начисления очков (gamification)",
+        "responses": {
+          "200": {
+            "description": "Список причин начисления очков",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "daily_order",
+                          "shabbat_order",
+                          "streak_3",
+                          "streak_7",
+                          "streak_14",
+                          "streak_30",
+                          "month_perfect",
+                          "referral",
+                          "first_order",
+                          "subscription_started",
+                          "manual_adjust"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/streak-types": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Типы стриков (gamification)",
+        "responses": {
+          "200": {
+            "description": "Список типов стриков",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "daily_cleanup",
+                          "weekly_order",
+                          "shabbat_order"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/feature-codes": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Коды функций (gamification)",
+        "responses": {
+          "200": {
+            "description": "Список кодов функций",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "shabbat_orders",
+                          "bonus_marketplace",
+                          "priority_courier",
+                          "partner_offers",
+                          "premium_support",
+                          "analytics_dashboard"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/feature-grant-types": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Типы выдачи доступа к функциям (gamification)",
+        "responses": {
+          "200": {
+            "description": "Список типов выдачи доступа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "level",
+                          "manual",
+                          "promo"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/webhook-event-types": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Типы событий для webhooks",
+        "responses": {
+          "200": {
+            "description": "Список типов событий",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "order.created",
+                          "order.completed",
+                          "order.cancelled",
+                          "order.assigned",
+                          "subscription.created",
+                          "bonus.earned",
+                          "bonus.redeemed"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/feature-flag-keys": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Ключи системных feature flags",
+        "responses": {
+          "200": {
+            "description": "Список ключей флагов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "example": "new_checkout_flow"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/environment-modes": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Режимы окружения",
+        "responses": {
+          "200": {
+            "description": "Список режимов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "production",
+                          "sandbox"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/environment": {
+      "get": {
+        "tags": [
+          "sandbox"
+        ],
+        "summary": "Текущий режим окружения",
+        "description": "Возвращает текущий режим окружения на основе заголовка X-Environment",
+        "responses": {
+          "200": {
+            "description": "Информация об окружении",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "production",
+                        "sandbox"
+                      ]
+                    },
+                    "isSandbox": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks": {
+      "get": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Список webhooks",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список зарегистрированных webhooks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Webhook"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Создать webhook",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "events"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL для доставки событий"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "order.created",
+                        "order.completed",
+                        "order.cancelled",
+                        "order.assigned",
+                        "subscription.created",
+                        "bonus.earned",
+                        "bonus.redeemed"
+                      ]
+                    },
+                    "description": "Типы событий для подписки"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "description": "Дополнительные метаданные"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/{id}": {
+      "get": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Получить webhook по ID",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Обновить webhook",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook обновлён",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Webhook"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Удалить webhook",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook удалён",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "deleted"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/{id}/test": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Отправить тестовое событие",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Тестовое событие отправлено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "delivery": {
+                      "$ref": "#/components/schemas/WebhookDelivery"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/{id}/deliveries": {
+      "get": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "История доставок webhook",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список доставок",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WebhookDelivery"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flags": {
+      "get": {
+        "tags": [
+          "system-flags"
+        ],
+        "summary": "Список системных feature flags",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Все флаги",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FeatureFlag"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "system-flags"
+        ],
+        "summary": "Создать feature flag",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "enabled"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "description": "Уникальный ключ флага"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "rolloutPercentage": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "default": 100
+                  },
+                  "targetUserTypes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "client",
+                        "courier",
+                        "staff"
+                      ]
+                    }
+                  },
+                  "metadata": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Флаг создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlag"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flags/{key}": {
+      "get": {
+        "tags": [
+          "system-flags"
+        ],
+        "summary": "Получить флаг по ключу",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Флаг найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlag"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Флаг не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "system-flags"
+        ],
+        "summary": "Обновить флаг",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "rolloutPercentage": {
+                    "type": "integer"
+                  },
+                  "targetUserTypes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Флаг обновлён",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlag"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "system-flags"
+        ],
+        "summary": "Удалить флаг",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Флаг удалён",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "deleted"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flags/{key}/check": {
+      "get": {
+        "tags": [
+          "system-flags"
+        ],
+        "summary": "Проверить доступ к функции для пользователя",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Результат проверки",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/levels": {
+      "get": {
+        "tags": [
+          "levels"
+        ],
+        "summary": "Список уровней",
+        "responses": {
+          "200": {
+            "description": "Все уровни отсортированы по minPoints",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Level"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "levels"
+        ],
+        "summary": "Создать уровень",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "nameKey",
+                  "minPoints"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "bronze",
+                      "silver",
+                      "gold",
+                      "platinum"
+                    ]
+                  },
+                  "nameKey": {
+                    "type": "string"
+                  },
+                  "minPoints": {
+                    "type": "integer"
+                  },
+                  "benefits": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Уровень создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Level"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/levels/{code}": {
+      "get": {
+        "tags": [
+          "levels"
+        ],
+        "summary": "Получить уровень по коду",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Уровень",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Level"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Уровень не найден"
+          }
+        }
+      }
+    },
+    "/users/{id}/progress": {
+      "get": {
+        "tags": [
+          "levels"
+        ],
+        "summary": "Прогресс пользователя",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Прогресс и текущий уровень",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/UserProgress"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "currentLevel": {
+                          "$ref": "#/components/schemas/Level"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "levels"
+        ],
+        "summary": "Добавить очки прогресса",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "points",
+                  "reason"
+                ],
+                "properties": {
+                  "points": {
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "daily_order",
+                      "shabbat_order",
+                      "streak_3",
+                      "streak_7",
+                      "streak_14",
+                      "streak_30",
+                      "month_perfect",
+                      "referral",
+                      "first_order",
+                      "subscription_started",
+                      "manual_adjust"
+                    ]
+                  },
+                  "referenceType": {
+                    "type": "string"
+                  },
+                  "referenceId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Транзакция создана",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ProgressTransaction"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}/progress/transactions": {
+      "get": {
+        "tags": [
+          "levels"
+        ],
+        "summary": "История транзакций очков",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список транзакций",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProgressTransaction"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}/level": {
+      "get": {
+        "tags": [
+          "levels"
+        ],
+        "summary": "Текущий уровень пользователя",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Уровень и история",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "currentLevel": {
+                      "$ref": "#/components/schemas/Level"
+                    },
+                    "achievedAt": {
+                      "type": "string"
+                    },
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UserLevel"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "levels"
+        ],
+        "summary": "Установить уровень пользователя",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "levelId"
+                ],
+                "properties": {
+                  "levelId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Уровень установлен"
+          }
+        }
+      }
+    },
+    "/users/{id}/streaks": {
+      "get": {
+        "tags": [
+          "streaks"
+        ],
+        "summary": "Все стрики пользователя",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список стриков",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserStreak"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}/streaks/{type}": {
+      "get": {
+        "tags": [
+          "streaks"
+        ],
+        "summary": "Конкретный стрик",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "daily_cleanup",
+                "weekly_order",
+                "shabbat_order"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Стрик",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserStreak"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}/streaks/{type}/increment": {
+      "post": {
+        "tags": [
+          "streaks"
+        ],
+        "summary": "Увеличить стрик",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Стрик увеличен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserStreak"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}/streaks/{type}/reset": {
+      "post": {
+        "tags": [
+          "streaks"
+        ],
+        "summary": "Сбросить стрик",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Стрик сброшен"
+          }
+        }
+      }
+    },
+    "/features": {
+      "get": {
+        "tags": [
+          "features"
+        ],
+        "summary": "Список функций",
+        "responses": {
+          "200": {
+            "description": "Все функции",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Feature"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "features"
+        ],
+        "summary": "Создать функцию",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "descriptionKey"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "shabbat_orders",
+                      "bonus_marketplace",
+                      "priority_courier",
+                      "partner_offers",
+                      "premium_support",
+                      "analytics_dashboard"
+                    ]
+                  },
+                  "descriptionKey": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Функция создана"
+          }
+        }
+      }
+    },
+    "/features/{code}": {
+      "get": {
+        "tags": [
+          "features"
+        ],
+        "summary": "Получить функцию по коду",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Функция",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feature"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      }
+    },
+    "/users/{id}/features": {
+      "get": {
+        "tags": [
+          "features"
+        ],
+        "summary": "Доступные функции пользователя",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список доступов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/UserFeatureAccess"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "feature": {
+                            "$ref": "#/components/schemas/Feature"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "features"
+        ],
+        "summary": "Выдать доступ к функции",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "featureId",
+                  "grantedBy"
+                ],
+                "properties": {
+                  "featureId": {
+                    "type": "string"
+                  },
+                  "grantedBy": {
+                    "type": "string",
+                    "enum": [
+                      "level",
+                      "manual",
+                      "promo"
+                    ]
+                  },
+                  "expiresAt": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Доступ выдан"
+          }
+        }
+      }
+    },
+    "/users/{id}/features/{code}": {
+      "get": {
+        "tags": [
+          "features"
+        ],
+        "summary": "Проверить доступ к функции",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Статус доступа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "featureCode": {
+                      "type": "string"
+                    },
+                    "hasAccess": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}/features/{featureId}": {
+      "delete": {
+        "tags": [
+          "features"
+        ],
+        "summary": "Отозвать доступ к функции",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "featureId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Доступ отозван"
+          },
+          "404": {
+            "description": "Не найдено"
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Регистрация пользователя",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Успешная регистрация",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Пользователь уже существует"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Авторизация",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешная авторизация",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверные учётные данные"
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Обновление токена",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "refreshToken"
+                ],
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Новый access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Текущий пользователь",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Данные пользователя",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/sessions": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Мои активные сессии",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список сессий",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Session"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/sessions/{id}": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Выход с устройства",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Сессия удалена"
+          }
+        }
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Выход со всех устройств",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Все сессии удалены"
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Список пользователей (ERP)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "client",
+                "courier",
+                "staff"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "blocked"
+              ]
+            }
+          },
+          {
+            "name": "includeDeleted",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список пользователей",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Информация о пользователе",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Данные пользователя",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Обновление пользователя",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUser"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Пользователь обновлён"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Soft delete пользователя",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Пользователь удалён"
+          }
+        }
+      }
+    },
+    "/users/{id}/roles": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Назначение ролей пользователю",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "roleIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Роли назначены"
+          }
+        }
+      }
+    },
+    "/addresses": {
+      "get": {
+        "tags": [
+          "addresses"
+        ],
+        "summary": "Мои адреса",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список адресов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Address"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "addresses"
+        ],
+        "summary": "Добавить адрес",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAddress"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Адрес создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Address"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/addresses/{id}": {
+      "patch": {
+        "tags": [
+          "addresses"
+        ],
+        "summary": "Обновить адрес",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAddress"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Адрес обновлён"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "addresses"
+        ],
+        "summary": "Удалить адрес (soft delete)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Адрес удалён"
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Список заказов",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created",
+                "scheduled",
+                "assigned",
+                "in_progress",
+                "completed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "includeDeleted",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список заказов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Order"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Создать заказ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Заказ создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Детали заказа",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeDeleted",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Детали заказа",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Обновить заказ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Заказ обновлён"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Soft delete заказа",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Заказ удалён"
+          }
+        }
+      }
+    },
+    "/orders/{id}/assign": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Назначить курьера",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "courierId"
+                ],
+                "properties": {
+                  "courierId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Курьер назначен"
+          }
+        }
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Отменить заказ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Заказ отменён"
+          }
+        }
+      }
+    },
+    "/courier/profile": {
+      "get": {
+        "tags": [
+          "courier"
+        ],
+        "summary": "Профиль курьера",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Профиль курьера",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourierProfile"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "courier"
+        ],
+        "summary": "Обновить статус курьера",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCourierProfile"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Профиль обновлён"
+          }
+        }
+      }
+    },
+    "/courier/orders": {
+      "get": {
+        "tags": [
+          "courier"
+        ],
+        "summary": "Заказы курьера",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список заказов курьера",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Order"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/courier/orders/{id}/accept": {
+      "post": {
+        "tags": [
+          "courier"
+        ],
+        "summary": "Принять заказ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Заказ принят"
+          }
+        }
+      }
+    },
+    "/courier/orders/{id}/complete": {
+      "post": {
+        "tags": [
+          "courier"
+        ],
+        "summary": "Завершить заказ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Заказ завершён"
+          }
+        }
+      }
+    },
+    "/roles": {
+      "get": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "Список ролей",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список ролей",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Role"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "Создать роль",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRole"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Роль создана"
+          }
+        }
+      }
+    },
+    "/permissions": {
+      "get": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "Список прав",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список прав",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Permission"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/couriers": {
+      "get": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "Список курьеров (ERP)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "includeDeleted",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список курьеров",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CourierWithProfile"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/couriers/{id}/verify": {
+      "patch": {
+        "tags": [
+          "roles"
+        ],
+        "summary": "Верификация курьера",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Курьер верифицирован"
+          }
+        }
+      }
+    },
+    "/audit-logs": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "Просмотр аудит логов",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Список записей аудита",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLog"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "RegisterRequest": {
+        "type": "object",
+        "required": [
+          "type",
+          "phone",
+          "password"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "client",
+              "courier",
+              "staff"
+            ]
+          },
+          "phone": {
+            "type": "string",
+            "example": "+972501234567"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "phone",
+          "password"
+        ],
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "$ref": "#/components/schemas/I18nMessage"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TokenResponse"
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "type": "integer"
+          }
+        }
+      },
+      "I18nMessage": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "auth.login_success"
+          },
+          "params": {
+            "type": "object"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "client",
+              "courier",
+              "staff"
+            ]
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "blocked"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateUser": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "blocked"
+            ]
+          }
+        }
+      },
+      "Address": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "street": {
+            "type": "string"
+          },
+          "house": {
+            "type": "string"
+          },
+          "apartment": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "integer"
+          },
+          "hasElevator": {
+            "type": "boolean"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "CreateAddress": {
+        "type": "object",
+        "required": [
+          "city",
+          "street",
+          "house"
+        ],
+        "properties": {
+          "city": {
+            "type": "string"
+          },
+          "street": {
+            "type": "string"
+          },
+          "house": {
+            "type": "string"
+          },
+          "apartment": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "integer"
+          },
+          "hasElevator": {
+            "type": "boolean"
+          },
+          "comment": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateAddress": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          },
+          "street": {
+            "type": "string"
+          },
+          "house": {
+            "type": "string"
+          },
+          "apartment": {
+            "type": "string"
+          },
+          "floor": {
+            "type": "integer"
+          },
+          "hasElevator": {
+            "type": "boolean"
+          },
+          "comment": {
+            "type": "string"
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "courierId": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressId": {
+            "type": "string"
+          },
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeWindow": {
+            "type": "string",
+            "example": "09:00-12:00"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "created",
+              "scheduled",
+              "assigned",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "price": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "CreateOrder": {
+        "type": "object",
+        "required": [
+          "addressId",
+          "scheduledAt",
+          "timeWindow"
+        ],
+        "properties": {
+          "addressId": {
+            "type": "string"
+          },
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeWindow": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          }
+        }
+      },
+      "UpdateOrder": {
+        "type": "object",
+        "properties": {
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeWindow": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "created",
+              "scheduled",
+              "assigned",
+              "in_progress",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "price": {
+            "type": "number"
+          }
+        }
+      },
+      "CourierProfile": {
+        "type": "object",
+        "properties": {
+          "courierId": {
+            "type": "string"
+          },
+          "availabilityStatus": {
+            "type": "string",
+            "enum": [
+              "available",
+              "busy",
+              "offline"
+            ]
+          },
+          "rating": {
+            "type": "number"
+          },
+          "completedOrdersCount": {
+            "type": "integer"
+          },
+          "verificationStatus": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "verified",
+              "rejected"
+            ]
+          },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateCourierProfile": {
+        "type": "object",
+        "properties": {
+          "availabilityStatus": {
+            "type": "string",
+            "enum": [
+              "available",
+              "busy",
+              "offline"
+            ]
+          }
+        }
+      },
+      "CourierWithProfile": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/CourierProfile"
+          }
+        }
+      },
+      "Role": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateRole": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "Permission": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuditLog": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "userRole": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "messageKey": {
+            "type": "string"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "object"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Стандартный формат ошибки",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Ключ локализации для отображения ошибки",
+                "example": "auth.invalid_credentials"
+              },
+              "params": {
+                "type": "object",
+                "description": "Параметры для подстановки в локализованный текст",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "example": {
+          "error": {
+            "key": "auth.invalid_credentials",
+            "params": {}
+          }
+        }
+      },
+      "ErrorKeys": {
+        "type": "object",
+        "description": "Справочник ключей ошибок для обработки на фронтенде.\n\n**Auth (auth.*)**\n- auth.invalid_credentials — неверные учётные данные\n- auth.token_expired — токен истёк\n- auth.token_invalid — невалидный токен\n- auth.user_blocked — пользователь заблокирован\n- auth.user_deleted — пользователь удалён\n\n**Order (order.*)**\n- order.not_found — заказ не найден\n- order.forbidden — нет доступа к заказу\n- order.already_deleted — заказ уже удалён\n- order.invalid_status_transition — недопустимый переход статуса\n- order.already_assigned — заказ уже назначен\n- order.not_assigned — заказ не назначен курьеру\n\n**Address (address.*)**\n- address.not_found — адрес не найден\n- address.forbidden — нет доступа к адресу\n- address.already_deleted — адрес уже удалён\n\n**User (user.*)**\n- user.not_found — пользователь не найден\n- user.already_deleted — пользователь уже удалён\n\n**Courier (courier.*)**\n- courier.not_found — курьер не найден\n- courier.profile_not_found — профиль курьера не найден\n\n**Common (common.*)**\n- common.validation_error — ошибка валидации\n- common.forbidden — доступ запрещён\n- common.not_found — ресурс не найден\n- common.conflict — конфликт состояния\n- common.rate_limit_exceeded — превышен лимит запросов\n- common.internal_error — внутренняя ошибка сервера\n\n**Session (session.*)**\n- session.device_not_found — устройство/сессия не найдена\n- session.deleted — сессия удалена\n- session.all_sessions_deleted — все сессии удалены\n"
+      },
+      "Event": {
+        "type": "object",
+        "description": "Продуктовое событие для аналитики",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "order.created",
+              "order.completed",
+              "order.completed.shabbat",
+              "order.cancelled",
+              "subscription.started",
+              "subscription.paused",
+              "subscription.cancelled",
+              "bonus.earned",
+              "bonus.redeemed",
+              "bonus.expired",
+              "courier.batch.completed",
+              "user.segment.entered",
+              "user.segment.exited",
+              "partner.offer.viewed",
+              "partner.offer.redeemed"
+            ]
+          },
+          "actorType": {
+            "type": "string",
+            "enum": [
+              "user",
+              "courier",
+              "system",
+              "staff"
+            ]
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserActivity": {
+        "type": "object",
+        "description": "Событие активности пользователя",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string",
+            "enum": [
+              "session_start",
+              "session_end",
+              "app_opened",
+              "order_placed",
+              "order_cancelled",
+              "subscription_started",
+              "subscription_paused",
+              "subscription_cancelled",
+              "bonus_earned",
+              "bonus_spent",
+              "payment_completed",
+              "address_added",
+              "profile_updated",
+              "referral_sent",
+              "support_contacted"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserFlag": {
+        "type": "object",
+        "description": "Флаг пользователя для сегментации",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "enum": [
+              "daily_user",
+              "shabbat_orders",
+              "high_frequency",
+              "no_tips",
+              "premium_candidate",
+              "churn_risk",
+              "high_ltv",
+              "price_sensitive",
+              "early_adopter",
+              "referrer",
+              "vip"
+            ]
+          },
+          "value": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BonusAccount": {
+        "type": "object",
+        "description": "Бонусный счёт пользователя",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "balance": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BonusTransaction": {
+        "type": "object",
+        "description": "Транзакция бонусного счёта",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "earn",
+              "spend",
+              "expire",
+              "adjust"
+            ]
+          },
+          "amount": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "order_completion",
+              "referral",
+              "promo",
+              "subscription",
+              "manual",
+              "order_payment",
+              "partner_offer",
+              "subscription_payment",
+              "bonus_expiration"
+            ]
+          },
+          "referenceType": {
+            "type": "string",
+            "nullable": true
+          },
+          "referenceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Subscription": {
+        "type": "object",
+        "description": "Подписка пользователя",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "addressId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "cancelled"
+            ]
+          },
+          "dayOfWeek": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6
+          },
+          "timeSlot": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pausedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cancelledAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "nextOrderAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SubscriptionPlan": {
+        "type": "object",
+        "description": "План подписки",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "descriptionKey": {
+            "type": "string"
+          },
+          "basePrice": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "default": "ILS"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Partner": {
+        "type": "object",
+        "description": "Партнёр маркетплейса",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "cleaning",
+              "laundry",
+              "repair",
+              "moving",
+              "storage",
+              "other"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "active",
+              "suspended"
+            ]
+          },
+          "contactEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "contactPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PartnerOffer": {
+        "type": "object",
+        "description": "Оффер партнёра",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerId": {
+            "type": "string"
+          },
+          "titleKey": {
+            "type": "string"
+          },
+          "descriptionKey": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "bonusPrice": {
+            "type": "number",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "default": "ILS"
+          },
+          "availableForSegments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OrderFinanceSnapshot": {
+        "type": "object",
+        "description": "Финансовый снимок заказа",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "clientPrice": {
+            "type": "number"
+          },
+          "courierPayout": {
+            "type": "number"
+          },
+          "bonusSpent": {
+            "type": "number"
+          },
+          "platformFee": {
+            "type": "number"
+          },
+          "margin": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "default": "ILS"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Level": {
+        "type": "object",
+        "description": "Определение уровня",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "bronze",
+              "silver",
+              "gold",
+              "platinum"
+            ]
+          },
+          "nameKey": {
+            "type": "string"
+          },
+          "minPoints": {
+            "type": "integer"
+          },
+          "benefits": {
+            "type": "object",
+            "description": "Привилегии уровня (скидки, доступ к функциям и т.д.)"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserLevel": {
+        "type": "object",
+        "description": "Текущий уровень пользователя",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "levelId": {
+            "type": "string"
+          },
+          "achievedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UserProgress": {
+        "type": "object",
+        "description": "Прогресс пользователя (общее количество очков)",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "totalPoints": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProgressTransaction": {
+        "type": "object",
+        "description": "Транзакция начисления/списания очков",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "points": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "daily_order",
+              "shabbat_order",
+              "streak_3",
+              "streak_7",
+              "streak_14",
+              "streak_30",
+              "month_perfect",
+              "referral",
+              "first_order",
+              "subscription_started",
+              "manual_adjust"
+            ]
+          },
+          "referenceType": {
+            "type": "string",
+            "nullable": true
+          },
+          "referenceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserStreak": {
+        "type": "object",
+        "description": "Стрик пользователя (серия непрерывных действий)",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "daily_cleanup",
+              "weekly_order",
+              "shabbat_order"
+            ]
+          },
+          "currentCount": {
+            "type": "integer"
+          },
+          "maxCount": {
+            "type": "integer"
+          },
+          "lastActionDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "Feature": {
+        "type": "object",
+        "description": "Определение функции для разблокировки",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "shabbat_orders",
+              "bonus_marketplace",
+              "priority_courier",
+              "partner_offers",
+              "premium_support",
+              "analytics_dashboard"
+            ]
+          },
+          "descriptionKey": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserFeatureAccess": {
+        "type": "object",
+        "description": "Доступ пользователя к функции",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "featureId": {
+            "type": "string"
+          },
+          "grantedBy": {
+            "type": "string",
+            "enum": [
+              "level",
+              "manual",
+              "promo"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ApiError": {
+        "type": "object",
+        "description": "Стандартный формат ошибки (immutable contract)",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Ключ локализации для клиентского перевода",
+                "example": "order.not_found"
+              },
+              "params": {
+                "type": "object",
+                "description": "Динамические параметры для интерполяции сообщения",
+                "additionalProperties": true,
+                "example": {
+                  "orderId": "123"
+                }
+              }
+            }
+          }
+        }
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "description": "Метаданные пагинации",
+        "required": [
+          "page",
+          "perPage",
+          "total",
+          "hasNext"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "description": "Текущая страница (1-indexed)",
+            "example": 1
+          },
+          "perPage": {
+            "type": "integer",
+            "description": "Количество элементов на странице",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "description": "Общее количество элементов",
+            "example": 134
+          },
+          "hasNext": {
+            "type": "boolean",
+            "description": "Есть ли следующая страница",
+            "example": true
+          }
+        }
+      },
+      "PaginatedResponse": {
+        "type": "object",
+        "description": "Стандартный формат ответа с пагинацией",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {}
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        }
+      },
+      "ClientType": {
+        "type": "string",
+        "description": "Тип клиента для OAuth-ready структуры",
+        "enum": [
+          "mobile_client",
+          "courier_app",
+          "erp",
+          "partner",
+          "web"
+        ]
+      },
+      "ClientMetadata": {
+        "type": "object",
+        "description": "Метаданные клиента для OAuth-ready авторизации",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "description": "Уникальный идентификатор клиента"
+          },
+          "clientType": {
+            "$ref": "#/components/schemas/ClientType"
+          },
+          "deviceId": {
+            "type": "string",
+            "description": "Идентификатор устройства"
+          },
+          "platform": {
+            "type": "string",
+            "description": "Платформа (ios, android, web)"
+          }
+        }
+      },
+      "Webhook": {
+        "type": "object",
+        "description": "Webhook для получения событий",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL для доставки событий"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "order.created",
+                "order.completed",
+                "order.cancelled",
+                "order.assigned",
+                "subscription.created",
+                "bonus.earned",
+                "bonus.redeemed"
+              ]
+            },
+            "description": "Типы событий"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Секрет для HMAC-SHA256 подписи (показывается только при создании)"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookDelivery": {
+        "type": "object",
+        "description": "Запись о доставке webhook",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "webhookId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "statusCode": {
+            "type": "integer",
+            "nullable": true
+          },
+          "response": {
+            "type": "string",
+            "nullable": true
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FeatureFlag": {
+        "type": "object",
+        "description": "Системный feature flag для постепенного раскатывания",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string",
+            "description": "Уникальный ключ флага"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Включён ли флаг глобально"
+          },
+          "rolloutPercentage": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Процент пользователей для раскатывания"
+          },
+          "targetUserTypes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "client",
+                "courier",
+                "staff"
+              ]
+            },
+            "description": "Целевые типы пользователей (пусто = все)"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

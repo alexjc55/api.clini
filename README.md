@@ -26,7 +26,7 @@ A production-ready REST API for waste collection and household services platform
 ### Prerequisites
 
 - Node.js 18+ 
-- PostgreSQL 14+ (optional, uses in-memory storage by default)
+- PostgreSQL 14+ (recommended for production)
 
 ### Installation
 
@@ -177,10 +177,36 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed system design documenta
 
 - **Runtime**: Node.js with TypeScript
 - **Framework**: Express.js
-- **Storage**: In-memory (MVP) / PostgreSQL (production via Drizzle ORM)
+- **Database**: PostgreSQL via Drizzle ORM (35 tables)
+- **Storage**: Automatic selection (PostgreSQL when `DATABASE_URL` set, in-memory fallback)
 - **Authentication**: JWT with refresh tokens
 - **Validation**: Zod schemas
 - **API Spec**: OpenAPI 3.0.3
+
+### Database Setup
+
+The API automatically detects and uses PostgreSQL when `DATABASE_URL` is configured:
+
+```bash
+# Push schema to database
+npx drizzle-kit push --dialect=postgresql --schema=./server/database/schema.ts --url=$DATABASE_URL
+```
+
+**Database Schema (35 Tables):**
+
+| Category | Tables |
+|----------|--------|
+| Core | users, roles, permissions, role_permissions, user_roles, addresses |
+| Courier | couriers, courier_documents |
+| Orders | orders, order_events, order_finance_snapshots |
+| Sessions/Audit | device_sessions, audit_logs, events |
+| User Data | user_activities, user_flags |
+| Gamification | levels, user_levels, user_progress, progress_transactions, user_streaks, features, user_feature_access |
+| Bonus System | bonus_accounts, bonus_transactions |
+| Subscriptions | subscriptions, subscription_plans, subscription_rules |
+| Partners | partners, partner_offers |
+| Webhooks | webhooks, webhook_deliveries |
+| System | feature_flags, idempotency_records |
 
 ### Project Structure
 
@@ -192,7 +218,13 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed system design documenta
 │       └── lib/            # Utilities and helpers
 ├── server/                 # Backend API
 │   ├── routes.ts           # API route definitions
-│   ├── storage.ts          # Data storage interface
+│   ├── storage.ts          # In-memory storage (MemStorage)
+│   ├── storage-factory.ts  # Automatic storage selection
+│   ├── repositories.ts     # Storage interface definitions
+│   ├── database/           # PostgreSQL integration
+│   │   ├── schema.ts       # Drizzle ORM table definitions
+│   │   ├── db-storage.ts   # PostgreSQL storage implementation
+│   │   └── connection.ts   # Database connection pool
 │   ├── middleware.ts       # Express middleware
 │   ├── webhooks.ts         # Webhook dispatch system
 │   └── sandbox-guard.ts    # Sandbox mode protection

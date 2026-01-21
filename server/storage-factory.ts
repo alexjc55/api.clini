@@ -45,4 +45,11 @@ export async function initializeStorage(): Promise<IStorage> {
   return getStorage();
 }
 
+export function getCurrentStorage(): IStorage {
+  if (!storageInstance) {
+    throw new Error("Storage not initialized. Call getStorage() first.");
+  }
+  return storageInstance;
+}
+
 export { storageInstance };

@@ -30,10 +30,39 @@ This document provides a comprehensive technical overview of the Waste Collectio
 - **Framework:** Express.js
 - **Authentication:** JWT (jsonwebtoken) + bcryptjs for password hashing
 - **Rate Limiting:** express-rate-limit
-- **Storage:** In-memory (MVP) with PostgreSQL-ready interfaces
+- **Database:** PostgreSQL via Drizzle ORM (with in-memory fallback for development)
+- **ORM:** Drizzle ORM with PostgreSQL dialect (35 tables)
 - **Validation:** Zod schemas with drizzle-zod
 - **Webhooks:** HMAC-SHA256 signed notifications
 - **Environment Isolation:** AsyncLocalStorage for request-scoped context
+
+### Database Architecture
+
+The API uses a dual-storage architecture with automatic selection:
+
+**Storage Factory Pattern:**
+- If `DATABASE_URL` is set and database is accessible → Uses PostgreSQL (DatabaseStorage)
+- Otherwise → Falls back to in-memory storage (MemStorage)
+
+**Database Schema (35 Tables):**
+| Category | Tables |
+|----------|--------|
+| Core | users, roles, permissions, role_permissions, user_roles, addresses |
+| Courier | couriers, courier_documents |
+| Orders | orders, order_events, order_finance_snapshots |
+| Sessions/Audit | device_sessions, audit_logs, events |
+| User Data | user_activities, user_flags |
+| Gamification | levels, user_levels, user_progress, progress_transactions, user_streaks, features, user_feature_access |
+| Bonus System | bonus_accounts, bonus_transactions |
+| Subscriptions | subscriptions, subscription_plans, subscription_rules |
+| Partners | partners, partner_offers |
+| Webhooks | webhooks, webhook_deliveries |
+| System | feature_flags, idempotency_records |
+
+**Database Migrations:**
+```bash
+npx drizzle-kit push --dialect=postgresql --schema=./server/database/schema.ts --url=$DATABASE_URL
+```
 
 ---
 
