@@ -108,7 +108,47 @@ Benefits:
 - Database migration without route changes
 - Clear separation of concerns
 
-### 4. Event-Driven History
+### 4. Database Migrations
+
+The API uses Drizzle ORM migrations for safe, incremental schema updates:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Migration Workflow                            │
+│                                                                  │
+│  Schema Change                                                   │
+│       │                                                          │
+│       ▼                                                          │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐        │
+│  │   Modify    │ ──▶ │  Generate   │ ──▶ │   Review    │        │
+│  │ schema.ts   │     │ Migration   │     │    SQL      │        │
+│  └─────────────┘     └─────────────┘     └─────────────┘        │
+│                            │                                     │
+│                            ▼                                     │
+│                   ┌─────────────────┐                           │
+│                   │ Apply to Target │                           │
+│                   │    Database     │                           │
+│                   └─────────────────┘                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Files:**
+
+| File | Purpose |
+|------|---------|
+| `server/database/schema.ts` | Source of truth for database schema |
+| `migrations/*.sql` | Generated incremental migrations |
+| `scripts/migrate.ts` | Safe migration runner |
+| `docs/database-schema.sql` | Full schema dump for reference |
+| `docs/MIGRATION_GUIDE.md` | Complete migration documentation |
+
+**Safety Features:**
+- Production migrations require `MIGRATE_CONFIRM=1`
+- Displays host/database before applying
+- Tracks applied migrations in `__drizzle_migrations`
+- Never use `drizzle-kit push` on production with existing data
+
+### 5. Event-Driven History
 
 All significant actions produce events:
 

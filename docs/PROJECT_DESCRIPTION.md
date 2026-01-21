@@ -43,6 +43,23 @@ The API implements a storage factory pattern:
 - **Development:** Falls back to in-memory storage for quick prototyping
 - **Sandbox Mode:** Isolated transactional data via `X-Environment: sandbox` header
 
+### Database Migrations
+
+Safe schema updates without data loss:
+
+| Resource | Description |
+|----------|-------------|
+| `docs/database-schema.sql` | Full schema dump (for fresh installs) |
+| `migrations/` | Incremental SQL migration files |
+| `scripts/migrate.ts` | Migration runner with production safeguards |
+| `docs/MIGRATION_GUIDE.md` | Detailed migration instructions |
+
+**Key Features:**
+- Production migrations require explicit `MIGRATE_CONFIRM=1`
+- Displays host/database info before applying
+- Tracks applied migrations in `__drizzle_migrations` table
+- Supports transitioning from `drizzle-kit push` to migrations
+
 ---
 
 ## Key Capabilities

@@ -111,15 +111,17 @@ pm2 startup
 | `scripts/migrate.ts` | Safe migration script for production |
 | `docs/MIGRATION_GUIDE.md` | Detailed migration instructions |
 
-### Fresh Installation (New Server)
+### Fresh Installation (New Empty Database Only)
 
 ```bash
-# Option 1: Apply full schema directly
+# Option 1: Apply full schema directly (recommended)
 psql $DATABASE_URL < docs/database-schema.sql
 
-# Option 2: Use Drizzle push
+# Option 2: Use Drizzle push (ONLY for empty databases!)
 npx drizzle-kit push --dialect=postgresql --schema=./server/database/schema.ts --url=$DATABASE_URL
 ```
+
+> **Note:** Both options are ONLY for fresh installations on empty databases. For existing databases with data, use incremental migrations.
 
 ### Incremental Migration (Existing Database)
 
@@ -226,6 +228,12 @@ Obtain tokens via:
 
 See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed system design documentation.
 
+**Additional Documentation:**
+- [MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md) - Database migration instructions
+- [PROJECT_DESCRIPTION.md](docs/PROJECT_DESCRIPTION.md) - Project overview
+- [TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md) - Technical specifications
+- [CONTRACT_POLICY.md](docs/CONTRACT_POLICY.md) - API versioning policy
+
 ### Tech Stack
 
 - **Runtime**: Node.js with TypeScript
@@ -285,9 +293,16 @@ npx drizzle-kit push --dialect=postgresql --schema=./server/database/schema.ts -
 │   └── schema.ts           # Database schema and types
 ├── docs/                   # Documentation
 │   ├── openapi.yaml        # OpenAPI specification
+│   ├── openapi.json        # OpenAPI specification (JSON)
+│   ├── database-schema.sql # Full database schema dump
 │   ├── ARCHITECTURE.md     # System architecture
 │   ├── CONTRACT_POLICY.md  # API contract policy
+│   ├── MIGRATION_GUIDE.md  # Database migration guide
+│   ├── PROJECT_DESCRIPTION.md # Project overview
 │   └── TECHNICAL_REPORT.md # Technical specifications
+├── migrations/             # Drizzle ORM migration files
+├── scripts/
+│   └── migrate.ts          # Safe migration runner
 └── package.json
 ```
 

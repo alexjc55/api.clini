@@ -77,7 +77,31 @@ The application uses a storage factory (`server/storage-factory.ts`) that automa
 - **System:** feature_flags, idempotency_records
 
 ### Running Migrations
+
+**Generate new migrations (after schema changes):**
 ```bash
-npx drizzle-kit generate   # Generate migration files
-npx drizzle-kit push       # Apply migrations to database
+npx drizzle-kit generate --dialect=postgresql --schema=./server/database/schema.ts --out=./migrations
 ```
+
+**Apply migrations (development):**
+```bash
+npx tsx scripts/migrate.ts
+```
+
+**Apply migrations (production):**
+```bash
+NODE_ENV=production MIGRATE_CONFIRM=1 npx tsx scripts/migrate.ts
+```
+
+**Fresh install (new server only):**
+```bash
+psql $DATABASE_URL < docs/database-schema.sql
+```
+
+> **Warning:** Never use `drizzle-kit push` on production databases with existing data.
+
+### Migration Files
+- `docs/database-schema.sql` - Full schema dump for reference
+- `migrations/*.sql` - Incremental migration files
+- `scripts/migrate.ts` - Safe migration runner with production safeguards
+- `docs/MIGRATION_GUIDE.md` - Complete migration documentation

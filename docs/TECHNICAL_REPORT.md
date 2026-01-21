@@ -60,9 +60,32 @@ The API uses a dual-storage architecture with automatic selection:
 | System | feature_flags, idempotency_records |
 
 **Database Migrations:**
+
+The API uses Drizzle ORM migrations for safe schema updates:
+
+| File/Folder | Purpose |
+|-------------|---------|
+| `docs/database-schema.sql` | Full schema dump for reference |
+| `migrations/*.sql` | Incremental migration files |
+| `scripts/migrate.ts` | Safe migration runner with production safeguards |
+| `docs/MIGRATION_GUIDE.md` | Complete migration documentation |
+
+**Commands:**
 ```bash
-npx drizzle-kit push --dialect=postgresql --schema=./server/database/schema.ts --url=$DATABASE_URL
+# Generate new migration after schema changes
+npx drizzle-kit generate --dialect=postgresql --schema=./server/database/schema.ts --out=./migrations
+
+# Apply migrations (development)
+npx tsx scripts/migrate.ts
+
+# Apply migrations (production - requires confirmation)
+NODE_ENV=production MIGRATE_CONFIRM=1 npx tsx scripts/migrate.ts
+
+# Fresh install (new server only)
+psql $DATABASE_URL < docs/database-schema.sql
 ```
+
+> **Warning:** Never use `drizzle-kit push` on production databases with existing data.
 
 ---
 
