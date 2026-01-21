@@ -23,7 +23,8 @@ The API follows an API-first, stateless REST architecture, returning JSON respon
 **Technical Implementations:**
 - **Core Technologies:** Node.js, TypeScript, Express, `express-rate-limit`.
 - **Authentication:** JWT (access + refresh tokens) using `jsonwebtoken`, password hashing with `bcryptjs`.
-- **Data Storage:** In-memory storage (for MVP), with interfaces ready for PostgreSQL migration.
+- **Data Storage:** Dual storage support - In-memory storage (MemStorage) for MVP/development, PostgreSQL via Drizzle ORM (DatabaseStorage) for production. Automatically selected based on `DATABASE_URL` environment variable.
+- **ORM:** Drizzle ORM with PostgreSQL dialect, 30+ tables covering all features.
 - **Date/Money Handling:** Dates are ISO 8601, money objects include `price` and `currency`.
 
 **Key Features:**
@@ -50,4 +51,33 @@ The API follows an API-first, stateless REST architecture, returning JSON respon
 - **jsonwebtoken:** For JWT-based authentication.
 - **bcryptjs:** For secure password hashing.
 - **express-rate-limit:** For API rate limiting.
-- **In-Memory Storage:** Used as the primary data store in the MVP.
+- **drizzle-orm:** PostgreSQL ORM for database operations.
+- **pg:** PostgreSQL client library.
+- **In-Memory Storage:** Used as the primary data store when DATABASE_URL is not set.
+
+## Database Architecture
+
+### Storage Factory Pattern
+The application uses a storage factory (`server/storage-factory.ts`) that automatically selects the appropriate storage implementation:
+- If `DATABASE_URL` is set and database is accessible → Uses `DatabaseStorage` (PostgreSQL)
+- Otherwise → Falls back to `MemStorage` (in-memory)
+
+### Database Schema (server/database/schema.ts)
+30+ tables organized by feature domain:
+- **Core:** users, roles, permissions, role_permissions, user_roles, addresses
+- **Courier:** couriers, courier_documents
+- **Orders:** orders, order_events, order_finance_snapshots
+- **Sessions/Audit:** device_sessions, audit_logs, events
+- **User Data:** user_activities, user_flags
+- **Gamification:** levels, user_levels, user_progress, progress_transactions, user_streaks, features, user_feature_access
+- **Bonus System:** bonus_accounts, bonus_transactions
+- **Subscriptions:** subscriptions, subscription_plans, subscription_rules
+- **Partners:** partners, partner_offers
+- **Webhooks:** webhooks, webhook_deliveries
+- **System:** feature_flags, idempotency_records
+
+### Running Migrations
+```bash
+npx drizzle-kit generate   # Generate migration files
+npx drizzle-kit push       # Apply migrations to database
+```

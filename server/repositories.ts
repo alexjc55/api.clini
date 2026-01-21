@@ -18,7 +18,10 @@ import type {
   UserProgress, ProgressTransaction, InsertProgressTransaction, ProgressReason,
   UserStreak, UpdateStreak, StreakType,
   Feature, InsertFeature, FeatureCode,
-  UserFeatureAccess, InsertUserFeatureAccess
+  UserFeatureAccess, InsertUserFeatureAccess,
+  Webhook, InsertWebhook, WebhookDelivery, WebhookEventType,
+  FeatureFlag, InsertFeatureFlag, SystemFeatureFlag,
+  IdempotencyRecord
 } from "@shared/schema";
 
 export interface IUserRepository {
@@ -94,7 +97,7 @@ export interface ISessionRepository {
   createSession(userId: string, refreshToken: string, deviceId: string, platform: "ios" | "android" | "web", userAgent: string | null, clientId?: string, clientType?: "mobile_client" | "courier_app" | "erp" | "partner" | "web"): Promise<Session>;
   getSession(refreshToken: string): Promise<Session | undefined>;
   getUserSessions(userId: string): Promise<Session[]>;
-  updateSessionLastSeen(sessionId: string): Promise<void>;
+  updateSessionLastSeen(sessionId: string, clientId?: string, clientType?: string): Promise<void>;
   deleteSession(sessionId: string): Promise<boolean>;
   deleteUserSessions(userId: string): Promise<void>;
 }
@@ -205,6 +208,41 @@ export interface IUserFeatureAccessRepository {
   revokeFeatureAccess(userId: string, featureId: string): Promise<boolean>;
 }
 
+// ==================== WEBHOOK REPOSITORIES ====================
+
+export interface IWebhookRepository {
+  getWebhook(id: string): Promise<Webhook | undefined>;
+  getWebhooks(partnerId?: string): Promise<Webhook[]>;
+  getWebhooksByPartner(partnerId: string): Promise<Webhook[]>;
+  getWebhooksByEvent(event: WebhookEventType): Promise<Webhook[]>;
+  createWebhook(partnerId: string, webhook: InsertWebhook): Promise<Webhook>;
+  updateWebhook(id: string, updates: Partial<Webhook>): Promise<Webhook | undefined>;
+  deleteWebhook(id: string): Promise<boolean>;
+  createWebhookDelivery(webhookId: string, eventType: WebhookEventType, payload: Record<string, unknown>): Promise<WebhookDelivery>;
+  updateWebhookDelivery(id: string, updates: Partial<WebhookDelivery>): Promise<WebhookDelivery | undefined>;
+  getWebhookDeliveries(webhookId: string): Promise<WebhookDelivery[]>;
+}
+
+// ==================== FEATURE FLAG REPOSITORIES ====================
+
+export interface IFeatureFlagRepository {
+  getFeatureFlag(id: string): Promise<FeatureFlag | undefined>;
+  getFeatureFlagByKey(key: SystemFeatureFlag): Promise<FeatureFlag | undefined>;
+  getFeatureFlags(): Promise<FeatureFlag[]>;
+  getAllFeatureFlags(): Promise<FeatureFlag[]>;
+  createFeatureFlag(flag: InsertFeatureFlag): Promise<FeatureFlag>;
+  updateFeatureFlag(id: string, updates: Partial<FeatureFlag>): Promise<FeatureFlag | undefined>;
+  deleteFeatureFlag(id: string): Promise<boolean>;
+  isFeatureEnabled(key: SystemFeatureFlag, userType?: UserType): Promise<boolean>;
+}
+
+// ==================== IDEMPOTENCY REPOSITORIES ====================
+
+export interface IIdempotencyRepository {
+  getIdempotencyRecord(key: string, userId: string, endpoint: string): Promise<IdempotencyRecord | undefined>;
+  setIdempotencyRecord(record: IdempotencyRecord): Promise<void>;
+}
+
 export interface IStorage extends 
   IUserRepository,
   IRoleRepository,
@@ -229,6 +267,9 @@ export interface IStorage extends
   IProgressRepository,
   IStreakRepository,
   IFeatureRepository,
-  IUserFeatureAccessRepository {
+  IUserFeatureAccessRepository,
+  IWebhookRepository,
+  IFeatureFlagRepository,
+  IIdempotencyRepository {
   initDefaults(): Promise<void>;
 }

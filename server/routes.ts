@@ -5,7 +5,10 @@ import rateLimit from "express-rate-limit";
 import { readFileSync } from "fs";
 import { join } from "path";
 import yaml from "js-yaml";
-import { storage } from "./storage";
+import { getStorage } from "./storage-factory";
+import type { IStorage } from "./repositories";
+
+let storage: IStorage;
 import { generateTokens, refreshAccessToken, revokeUserTokens } from "./auth";
 import { authMiddleware, requirePermissions, requireUserType, sendError, i18nMiddleware, requestIdMiddleware, idempotencyMiddleware, sandboxMiddleware, metaCacheMiddleware } from "./middleware";
 import { sandboxWriteGuard } from "./sandbox-guard";
@@ -113,7 +116,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  await storage.initDefaults();
+  storage = await getStorage();
   
   app.use(requestIdMiddleware);
   app.use(i18nMiddleware);

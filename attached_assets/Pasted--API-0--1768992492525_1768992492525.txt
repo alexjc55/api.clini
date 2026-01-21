@@ -1,0 +1,261 @@
+ТЕХНИЧЕСКОЕ ЗАДАНИЕ
+Проектирование схемы БД и подключение БД к API
+0. Общие принципы (ОБЯЗАТЕЛЬНО)
+
+База данных принадлежит API
+
+ERP и мобильные приложения не имеют прямого доступа к БД
+
+Вся работа с данными осуществляется исключительно через API
+
+API — единственный источник истины
+
+Бизнес-логика, валидация, RBAC, i18n — только в API
+
+БД не содержит логики, только данные
+
+Поддержка расширяемости
+
+Схема должна быть готова к:
+
+подпискам
+
+рейтингам
+
+чаевым
+
+геотрекингу
+
+платежам
+
+Без изменения существующих таблиц
+
+Soft delete
+
+Ключевые сущности используют deleted_at
+
+Физическое удаление запрещено
+
+1. Выбор БД и способ подключения
+1.1 Тип БД
+
+PostgreSQL 14+
+
+Причины:
+
+транзакции
+
+JSONB
+
+индексы
+
+production-ready
+
+1.2 Подключение БД к API
+Переменные окружения
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+Требования:
+
+доступ к БД только с API
+
+ORM или query builder (Prisma / Drizzle / TypeORM — любой, но единый)
+
+migrations обязательны
+
+2. Структура слоёв API (обязательно)
+src/
+ ├─ database/
+ │   ├─ migrations/
+ │   ├─ schema/
+ │   └─ index.ts
+ ├─ repositories/
+ ├─ services/
+ ├─ controllers/
+ └─ routes/
+
+
+repositories — только SQL/ORM
+
+services — бизнес-логика
+
+controllers — HTTP / i18n / errors
+
+3. Таблицы БД (полный список)
+3.1 users
+
+Хранит всех: клиентов, курьеров, staff.
+
+users (
+  id UUID PK,
+  email VARCHAR UNIQUE NULL,
+  phone VARCHAR UNIQUE NULL,
+  password_hash TEXT NOT NULL,
+  type VARCHAR NOT NULL, -- client | courier | staff
+  status VARCHAR NOT NULL, -- active | blocked | pending
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP,
+  deleted_at TIMESTAMP NULL
+)
+
+3.2 roles
+roles (
+  id UUID PK,
+  code VARCHAR UNIQUE, -- admin, manager, accountant, dispatcher, support
+  created_at TIMESTAMP
+)
+
+3.3 permissions
+permissions (
+  id UUID PK,
+  code VARCHAR UNIQUE -- orders.read, users.write, etc
+)
+
+3.4 role_permissions
+role_permissions (
+  role_id UUID FK -> roles.id,
+  permission_id UUID FK -> permissions.id
+)
+
+3.5 user_roles
+user_roles (
+  user_id UUID FK -> users.id,
+  role_id UUID FK -> roles.id
+)
+
+3.6 addresses
+addresses (
+  id UUID PK,
+  user_id UUID FK -> users.id,
+  city VARCHAR,
+  street VARCHAR,
+  house VARCHAR,
+  apartment VARCHAR,
+  lat DECIMAL NULL,
+  lng DECIMAL NULL,
+  created_at TIMESTAMP
+)
+
+3.7 couriers
+couriers (
+  user_id UUID PK FK -> users.id,
+  availability_status VARCHAR, -- available | busy | offline
+  verification_status VARCHAR, -- pending | verified | rejected
+  rating DECIMAL DEFAULT 0,
+  created_at TIMESTAMP
+)
+
+3.8 courier_documents
+courier_documents (
+  id UUID PK,
+  courier_id UUID FK -> users.id,
+  type VARCHAR, -- id, driver_license, visa
+  file_url TEXT,
+  status VARCHAR, -- pending | approved | rejected
+  uploaded_at TIMESTAMP
+)
+
+3.9 orders
+orders (
+  id UUID PK,
+  client_id UUID FK -> users.id,
+  courier_id UUID FK -> users.id NULL,
+  address_id UUID FK -> addresses.id,
+  status VARCHAR, -- created | scheduled | in_progress | completed | cancelled
+  scheduled_at TIMESTAMP NULL,
+  price INTEGER,
+  currency VARCHAR,
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP,
+  deleted_at TIMESTAMP NULL
+)
+
+3.10 order_events (аудит жизненного цикла)
+order_events (
+  id UUID PK,
+  order_id UUID FK -> orders.id,
+  type VARCHAR, -- created | assigned | started | completed | cancelled
+  actor_id UUID FK -> users.id,
+  metadata JSONB,
+  created_at TIMESTAMP
+)
+
+3.11 audit_logs (staff-действия)
+audit_logs (
+  id UUID PK,
+  user_id UUID FK -> users.id,
+  role VARCHAR,
+  entity_type VARCHAR,
+  entity_id UUID,
+  action VARCHAR,
+  message_key VARCHAR,
+  metadata JSONB,
+  created_at TIMESTAMP
+)
+
+3.12 device_sessions
+device_sessions (
+  id UUID PK,
+  user_id UUID FK -> users.id,
+  device_id VARCHAR,
+  platform VARCHAR, -- ios | android | web
+  refresh_token_hash TEXT,
+  last_seen_at TIMESTAMP,
+  created_at TIMESTAMP
+)
+
+4. Индексы (обязательно)
+
+users(type, status)
+
+orders(status, courier_id)
+
+order_events(order_id)
+
+audit_logs(user_id, created_at)
+
+device_sessions(user_id)
+
+5. Связь API ↔ БД
+Правила:
+
+API не возвращает внутренние поля (password_hash, refresh_token_hash)
+
+Все ошибки → { key, params }
+
+Все даты → ISO 8601
+
+Все enum значения → через meta endpoints
+
+6. Что НЕ делать (критично)
+
+❌ ERP напрямую в БД
+❌ Shared ORM между API и фронтом
+❌ Тексты в БД для UI
+❌ Хардкод enum’ов на фронте
+
+7. Готовность к v2
+
+Без изменения схемы можно добавить:
+
+subscriptions
+
+reviews
+
+tips
+
+tracking
+
+payments
+
+8. Критерии приёмки
+
+API стартует без БД → падает корректно
+
+Все таблицы создаются через migrations
+
+ERP получает данные только через API
+
+Добавление новой роли не требует изменения БД
+
+Добавление нового языка не требует изменения БД
