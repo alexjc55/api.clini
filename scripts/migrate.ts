@@ -10,12 +10,41 @@ async function runMigrations() {
     process.exit(1);
   }
 
-  console.log("Starting database migration...");
+  // Safety check: require explicit confirmation for production migrations
+  const isProduction = process.env.NODE_ENV === "production";
+  const migrateConfirm = process.env.MIGRATE_CONFIRM === "1";
+  
+  if (isProduction && !migrateConfirm) {
+    console.error("ERROR: Production migration requires MIGRATE_CONFIRM=1");
+    console.error("Run: MIGRATE_CONFIRM=1 npx tsx scripts/migrate.ts");
+    process.exit(1);
+  }
+
+  // Parse and display database info for verification
+  const dbUrl = new URL(databaseUrl);
+  const dbHost = dbUrl.hostname;
+  const dbName = dbUrl.pathname.slice(1);
+  
+  console.log("=".repeat(50));
+  console.log("DATABASE MIGRATION");
+  console.log("=".repeat(50));
+  console.log(`Host: ${dbHost}`);
+  console.log(`Database: ${dbName}`);
+  console.log(`Environment: ${isProduction ? "PRODUCTION" : "development"}`);
+  console.log("=".repeat(50));
+
+  if (isProduction) {
+    console.log("\nWARNING: You are migrating a PRODUCTION database!");
+    console.log("Make sure you have created a backup before proceeding.\n");
+  }
+
   console.log("Connecting to database...");
 
+  // SSL configuration note: rejectUnauthorized: false is required for many cloud providers
+  // (Neon, Supabase, Railway, etc.) that use self-signed certificates
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+    ssl: isProduction ? { rejectUnauthorized: false } : false,
   });
 
   try {

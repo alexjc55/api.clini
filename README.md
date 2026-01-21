@@ -136,7 +136,7 @@ npx tsx scripts/migrate.ts
 When you modify `server/database/schema.ts`:
 
 ```bash
-# Generate migration SQL
+# Generate migration SQL (ALWAYS use --schema parameter explicitly)
 npx drizzle-kit generate --dialect=postgresql --schema=./server/database/schema.ts --out=./migrations
 
 # Review generated SQL before applying
@@ -144,7 +144,12 @@ cat migrations/XXXX_*.sql
 
 # Apply migration
 npx tsx scripts/migrate.ts
+
+# For production (requires explicit confirmation)
+NODE_ENV=production MIGRATE_CONFIRM=1 npx tsx scripts/migrate.ts
 ```
+
+> **Warning:** Never use `drizzle-kit push` on production databases with existing data. It may delete columns/tables to sync schema. Use incremental migrations only.
 
 See [docs/MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md) for complete migration documentation.
 
