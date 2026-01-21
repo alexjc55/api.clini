@@ -1,6 +1,6 @@
-# Contributing to Waste Collection API
+# Contributing to Clini API
 
-Thank you for your interest in contributing to the Waste Collection API! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to the Clini API! This document provides guidelines and information for contributors.
 
 ## Table of Contents
 
@@ -40,13 +40,13 @@ By participating in this project, you agree to maintain a respectful and inclusi
 
 2. **Clone your fork**:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/waste-collection-api.git
-   cd waste-collection-api
+   git clone https://github.com/YOUR_USERNAME/clini-api.git
+   cd clini-api
    ```
 
 3. **Add upstream remote**:
    ```bash
-   git remote add upstream https://github.com/your-org/waste-collection-api.git
+   git remote add upstream https://github.com/your-org/clini-api.git
    ```
 
 4. **Install dependencies**:

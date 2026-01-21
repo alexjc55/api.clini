@@ -5,7 +5,7 @@
 **Effective Date:** January 2026  
 **Version:** 1.0
 
-This document establishes the immutability guarantees for the Waste Collection API contracts.
+This document establishes the immutability guarantees for the Clini API contracts.
 
 ---
 

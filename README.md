@@ -1,4 +1,4 @@
-# Waste Collection API
+# Clini API
 
 [![API Version](https://img.shields.io/badge/API-v1.0-blue.svg)](docs/openapi.yaml)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0.3-green.svg)](docs/openapi.yaml)

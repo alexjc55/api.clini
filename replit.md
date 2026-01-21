@@ -1,4 +1,4 @@
-# Waste Collection API
+# Clini API
 
 ## Overview
 This project is a centralized REST API designed to serve as the backend for a waste collection and household services platform. It aims to be the single source of truth for an ERP system, client mobile applications, courier mobile applications, and future products. The API supports various user types (client, courier, staff) and is built for scalability and extensibility.

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Waste Collection API
+  title: Clini API
   description: |
     REST API для сервиса выноса мусора / бытовых услуг.
     

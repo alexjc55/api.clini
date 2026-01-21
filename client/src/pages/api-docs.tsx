@@ -32,7 +32,7 @@ interface ApiSection {
 
 const t = {
   en: {
-    title: "Waste Collection API",
+    title: "Clini API",
     version: "v1.0 • OpenAPI 3.0",
     tryIt: "Try it",
     request: "Request",
@@ -152,7 +152,7 @@ const t = {
     ]
   },
   ru: {
-    title: "Waste Collection API",
+    title: "Clini API",
     version: "v1.0 • OpenAPI 3.0",
     tryIt: "Попробовать",
     request: "Запрос",

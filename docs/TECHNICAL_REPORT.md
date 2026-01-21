@@ -1,8 +1,8 @@
-# Waste Collection API - Technical Report
+# Clini API - Technical Report
 
 ## Overview
 
-This document provides a comprehensive technical overview of the Waste Collection API - a production-ready RESTful backend designed for waste collection and household services platforms.
+This document provides a comprehensive technical overview of the Clini API - a production-ready RESTful backend designed for waste collection and household services platforms.
 
 **Version:** 1.0  
 **Base URL:** `/api/v1/*`  

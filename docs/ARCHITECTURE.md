@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Waste Collection API is a RESTful backend service designed to power a waste collection and household services platform. It serves as the central data hub for multiple client applications including:
+The Clini API is a RESTful backend service designed to power a waste collection and household services platform. It serves as the central data hub for multiple client applications including:
 
 - **Client Mobile App** - End-user ordering and account management
 - **Courier Mobile App** - Order fulfillment and route management

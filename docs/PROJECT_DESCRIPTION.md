@@ -1,8 +1,8 @@
-# Waste Collection API - Project Description
+# Clini API - Project Description
 
 ## About the Project
 
-Waste Collection API is a centralized backend service designed for waste collection and household services platforms. It serves as the single source of truth for an entire ecosystem including:
+Clini API is a centralized backend service designed for waste collection and household services platforms. It serves as the single source of truth for an entire ecosystem including:
 
 - ERP system
 - Client mobile applications

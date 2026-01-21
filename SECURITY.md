@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Waste Collection API takes security seriously. This document outlines our security practices, vulnerability reporting process, and security-related guidelines for contributors.
+The Clini API takes security seriously. This document outlines our security practices, vulnerability reporting process, and security-related guidelines for contributors.
 
 ## Supported Versions
 
