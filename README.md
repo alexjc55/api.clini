@@ -338,7 +338,15 @@ npx drizzle-kit push --dialect=postgresql --schema=./server/database/schema.ts -
 | Users | `/users/*` | User management (CRUD) |
 | Orders | `/orders/*` | Order lifecycle management |
 | Addresses | `/addresses/*` | User address management |
-| Courier | `/courier/*` | Courier-specific operations |
+| Couriers | `/couriers/*` | Courier management and profiles |
+
+### Convenience Endpoints for Mobile Apps
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/users/me` | GET | Get current user profile (no need to parse JWT for userId) |
+| `/couriers/me` | GET | Get current courier profile (courier users only) |
+| `/auth/me` | GET | Get current authenticated user info |
 
 ### Extended Features
 

@@ -2584,6 +2584,51 @@
         }
       }
     },
+    "/users/me": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Профиль текущего пользователя",
+        "description": "Возвращает профиль текущего авторизованного пользователя без необходимости знать его ID. Эквивалентен /auth/me, но в namespace /users для удобства мобильных приложений.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Профиль текущего пользователя с ролями",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "roles": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": ["client"]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован"
+          }
+        }
+      }
+    },
     "/users/{id}": {
       "get": {
         "tags": [
@@ -3329,7 +3374,7 @@
     "/couriers": {
       "get": {
         "tags": [
-          "roles"
+          "courier"
         ],
         "summary": "Список курьеров (ERP)",
         "security": [
@@ -3359,6 +3404,41 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/couriers/me": {
+      "get": {
+        "tags": [
+          "courier"
+        ],
+        "summary": "Профиль текущего курьера",
+        "description": "Возвращает профиль текущего авторизованного курьера. Доступен только пользователям с типом `courier`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Профиль курьера с данными профиля",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourierWithProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "403": {
+            "description": "Пользователь не является курьером"
+          },
+          "404": {
+            "description": "Профиль курьера не найден"
           }
         }
       }

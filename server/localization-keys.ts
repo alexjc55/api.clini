@@ -70,6 +70,7 @@ export const LOCALIZATION_KEYS = {
   },
   courier: {
     not_found: "courier.not_found",
+    not_courier: "courier.not_courier",
     profile_not_found: "courier.profile_not_found",
     profile_updated: "courier.profile_updated",
     verified: "courier.verified",

@@ -304,6 +304,12 @@ export async function registerRoutes(
     res.json(result);
   });
 
+  v1Router.get("/users/me", authMiddleware, async (req, res) => {
+    const { passwordHash, ...userData } = req.user!;
+    const roles = await storage.getUserRoles(req.user!.id);
+    res.json({ ...userData, roles: roles.map(r => r.name) });
+  });
+
   v1Router.get("/users/:id", authMiddleware, requirePermissions("users.read"), async (req, res) => {
     const user = await storage.getUser(req.params.id);
     if (!user) {
@@ -829,6 +835,21 @@ export async function registerRoutes(
     );
     
     res.json(couriersWithProfiles);
+  });
+
+  v1Router.get("/couriers/me", authMiddleware, requireUserType("courier"), async (req, res) => {
+    const user = req.user!;
+    if (user.type !== "courier") {
+      return sendError(res, 403, L.courier.not_courier);
+    }
+    
+    const { passwordHash, ...userData } = user;
+    const profile = await storage.getCourierProfile(user.id);
+    if (!profile) {
+      return sendError(res, 404, L.courier.profile_not_found, { courierId: user.id });
+    }
+    
+    res.json({ ...userData, profile });
   });
 
   v1Router.patch("/couriers/:id/verify", authMiddleware, requirePermissions("couriers.verify"), async (req, res) => {
