@@ -22,9 +22,10 @@ The API follows an API-first, stateless REST architecture, returning JSON respon
 
 **Technical Implementations:**
 - **Core Technologies:** Node.js, TypeScript, Express, `express-rate-limit`.
-- **Authentication:** JWT (access + refresh tokens) using `jsonwebtoken`, password hashing with `bcryptjs`.
+- **Authentication:** JWT (access 15min + refresh 7days) using `jsonwebtoken`, password hashing with `bcryptjs`. Refresh tokens stored in `device_sessions` table (PostgreSQL).
+- **CORS:** Configured via `ALLOWED_ORIGINS` env var. Comma-separated domains or `*` for all.
 - **Data Storage:** Dual storage support - In-memory storage (MemStorage) for MVP/development, PostgreSQL via Drizzle ORM (DatabaseStorage) for production. Automatically selected based on `DATABASE_URL` environment variable.
-- **ORM:** Drizzle ORM with PostgreSQL dialect, 30+ tables covering all features.
+- **ORM:** Drizzle ORM with PostgreSQL dialect, 35 tables covering all features.
 - **Date/Money Handling:** Dates are ISO 8601, money objects include `price` and `currency`.
 
 **Key Features:**

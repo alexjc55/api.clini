@@ -180,6 +180,22 @@ export async function registerRoutes(
       const user = await storage.createUser(data);
       const tokens = generateTokens(user.id);
       
+      const deviceId = req.headers["x-device-id"] as string || "unknown";
+      const userAgent = req.headers["user-agent"] || null;
+      const platform = (req.body.platform || "web") as "ios" | "android" | "web";
+      const clientId = req.body.clientId;
+      const clientType = req.body.clientType;
+      
+      await storage.createSession(
+        user.id,
+        tokens.refreshToken,
+        deviceId,
+        platform,
+        userAgent,
+        clientId,
+        clientType
+      );
+      
       await createAuditLogEntry(user.id, "CREATE_USER", "user", user.id, {}, { self: true });
       
       res.status(201).json({
@@ -247,13 +263,13 @@ export async function registerRoutes(
       }
       
       const existingSession = await storage.getSession(refreshToken);
-      const tokens = refreshAccessToken(refreshToken);
-      if (!tokens) {
+      if (!existingSession) {
         return sendError(res, 401, L.auth.token_expired);
       }
       
-      if (existingSession) {
-        await storage.updateSessionLastSeen(existingSession.id, clientId, clientType);
+      const tokens = await refreshAccessToken(refreshToken, storage);
+      if (!tokens) {
+        return sendError(res, 401, L.auth.token_expired);
       }
       
       res.json({
@@ -311,8 +327,7 @@ export async function registerRoutes(
     }
     
     if (req.body.status === "blocked" && existingUser.status !== "blocked") {
-      revokeUserTokens(user.id);
-      await storage.deleteUserSessions(user.id);
+      await revokeUserTokens(user.id, storage);
       await createAuditLogEntry(req.user!.id, "BLOCK_USER", "user", req.params.id, 
         { status: { from: existingUser.status, to: "blocked" } });
     } else if (Object.keys(req.body).length > 0) {
@@ -366,8 +381,7 @@ export async function registerRoutes(
     }
     
     const deleted = await storage.softDeleteUser(req.params.id);
-    revokeUserTokens(req.params.id);
-    await storage.deleteUserSessions(req.params.id);
+    await revokeUserTokens(req.params.id, storage);
     
     await createAuditLogEntry(req.user!.id, "DELETE_USER", "user", req.params.id,
       { deletedAt: { from: null, to: deleted?.deletedAt } });
@@ -889,8 +903,7 @@ export async function registerRoutes(
   });
 
   v1Router.post("/auth/logout-all", authMiddleware, async (req, res) => {
-    await storage.deleteUserSessions(req.user!.id);
-    revokeUserTokens(req.user!.id);
+    await revokeUserTokens(req.user!.id, storage);
     res.json({ 
       status: "success", 
       message: { key: L.session.all_sessions_deleted } 

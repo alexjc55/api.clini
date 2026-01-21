@@ -1,9 +1,10 @@
 import jwt from "jsonwebtoken";
+import type { IStorage } from "./repositories";
 
-const JWT_SECRET = process.env.SESSION_SECRET;
-if (!JWT_SECRET) {
+if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable is required");
 }
+const JWT_SECRET: string = process.env.SESSION_SECRET;
 
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY = "7d";
@@ -12,8 +13,6 @@ interface TokenPayload {
   userId: string;
   type: "access" | "refresh";
 }
-
-const refreshTokens = new Map<string, { userId: string; exp: number }>();
 
 export function generateTokens(userId: string): { accessToken: string; refreshToken: string } {
   const accessToken = jwt.sign(
@@ -28,15 +27,12 @@ export function generateTokens(userId: string): { accessToken: string; refreshTo
     { expiresIn: REFRESH_TOKEN_EXPIRY, issuer: "waste-collection-api" }
   );
   
-  const decoded = jwt.decode(refreshToken) as { exp: number };
-  refreshTokens.set(refreshToken, { userId, exp: decoded.exp * 1000 });
-  
   return { accessToken, refreshToken };
 }
 
 export function verifyAccessToken(token: string): string | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET, { issuer: "waste-collection-api" }) as TokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET, { issuer: "waste-collection-api" }) as unknown as TokenPayload;
     if (payload.type !== "access") return null;
     return payload.userId;
   } catch {
@@ -44,28 +40,39 @@ export function verifyAccessToken(token: string): string | null {
   }
 }
 
-export function refreshAccessToken(refreshToken: string): { accessToken: string; refreshToken: string } | null {
+export async function refreshAccessToken(
+  refreshToken: string,
+  storage: IStorage
+): Promise<{ accessToken: string; refreshToken: string } | null> {
   try {
-    const payload = jwt.verify(refreshToken, JWT_SECRET, { issuer: "waste-collection-api" }) as TokenPayload;
+    const payload = jwt.verify(refreshToken, JWT_SECRET, { issuer: "waste-collection-api" }) as unknown as TokenPayload;
     if (payload.type !== "refresh") return null;
     
-    const stored = refreshTokens.get(refreshToken);
-    if (!stored) return null;
+    const session = await storage.getSession(refreshToken);
+    if (!session) return null;
     
-    refreshTokens.delete(refreshToken);
-    return generateTokens(payload.userId);
+    await storage.deleteSession(session.id);
+    
+    const tokens = generateTokens(payload.userId);
+    
+    await storage.createSession(
+      payload.userId,
+      tokens.refreshToken,
+      session.deviceId,
+      session.platform,
+      session.userAgent || null,
+      session.clientId || undefined,
+      session.clientType as "mobile_client" | "courier_app" | "erp" | "partner" | "web" | undefined
+    );
+    
+    return tokens;
   } catch {
-    refreshTokens.delete(refreshToken);
     return null;
   }
 }
 
-export function revokeUserTokens(userId: string): void {
-  for (const [token, data] of refreshTokens.entries()) {
-    if (data.userId === userId) {
-      refreshTokens.delete(token);
-    }
-  }
+export async function revokeUserTokens(userId: string, storage: IStorage): Promise<void> {
+  await storage.deleteUserSessions(userId);
 }
 
 export function extractToken(authHeader: string | undefined): string | null {

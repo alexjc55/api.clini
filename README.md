@@ -60,6 +60,18 @@ npm run dev
 | `NODE_ENV` | Environment: `development` or `production` | No |
 | `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | No |
 
+**CORS Configuration:**
+
+```bash
+# Allow specific domains
+ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+
+# Allow all domains (development only, not recommended for production)
+ALLOWED_ORIGINS=*
+
+# If not set, defaults to allowing all origins
+```
+
 **DATABASE_URL Format:**
 ```
 postgresql://username:password@host:5432/database_name
@@ -177,10 +189,20 @@ All protected endpoints require a Bearer token:
 Authorization: Bearer <access_token>
 ```
 
-Obtain tokens via:
+**Token Flow:**
+1. Register or login to receive `accessToken` (15 min) and `refreshToken` (7 days)
+2. Use `accessToken` in `Authorization` header for API requests
+3. When `accessToken` expires, call refresh endpoint with `refreshToken`
+4. Sessions are stored in PostgreSQL `device_sessions` table (survives server restarts)
+
+**Endpoints:**
 - `POST /api/v1/auth/register` - New user registration
-- `POST /api/v1/auth/login` - User login
-- `POST /api/v1/auth/refresh` - Token refresh
+- `POST /api/v1/auth/login` - User login (returns tokens + creates session)
+- `POST /api/v1/auth/refresh` - Token refresh (rotates both tokens)
+- `POST /api/v1/auth/logout` - Logout current session
+- `POST /api/v1/auth/logout-all` - Logout all sessions
+- `GET /api/v1/sessions` - List user sessions
+- `DELETE /api/v1/sessions/:id` - Delete specific session
 
 ### Standard Headers
 

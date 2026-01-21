@@ -100,11 +100,12 @@ psql $DATABASE_URL < docs/database-schema.sql
 - `POST /auth/logout` - Session termination
 
 **Security Features:**
-- Access + Refresh token pattern
+- Access + Refresh token pattern (JWT with 15min/7day expiry)
 - Rate limiting on authentication endpoints
-- Refresh token revocation
-- Device/session tracking
-- Password hashing with bcryptjs
+- Refresh token revocation (stored in PostgreSQL `device_sessions` table)
+- Device/session tracking with platform and client type
+- Password hashing with bcryptjs (10 rounds)
+- Session persistence survives server restarts
 
 **RBAC Implementation:**
 - Roles: `client`, `courier`, `staff`, `admin`
