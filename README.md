@@ -31,7 +31,10 @@ A production-ready REST API for waste collection and household services platform
 ### Installation
 
 ```bash
-# Clone the repository
+# Clone the repository (into current directory)
+git clone https://github.com/your-org/waste-collection-api.git .
+
+# Or clone into a new folder
 git clone https://github.com/your-org/waste-collection-api.git
 cd waste-collection-api
 
@@ -40,6 +43,8 @@ npm install
 
 # Set up environment variables
 cp .env.example .env
+# Edit .env with your values (see Environment Variables section)
+nano .env
 
 # Start development server
 npm run dev
@@ -49,12 +54,25 @@ npm run dev
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `SESSION_SECRET` | Secret for session encryption | Yes |
+| `SESSION_SECRET` | Secret for JWT signing (min 32 chars) | Yes |
 | `DATABASE_URL` | PostgreSQL connection string | No (uses memory) |
+| `PORT` | Server port (default: 5000) | No |
+| `NODE_ENV` | Environment: `development` or `production` | No |
 | `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | No |
-| `JWT_SECRET` | Secret for JWT signing | Yes |
-| `JWT_EXPIRES_IN` | Access token expiration (e.g., `15m`) | No |
-| `REFRESH_TOKEN_EXPIRES_IN` | Refresh token expiration (e.g., `7d`) | No |
+
+**DATABASE_URL Format:**
+```
+postgresql://username:password@host:5432/database_name
+```
+
+**Important:** If your password contains special characters, URL-encode them:
+| Character | Encoded |
+|-----------|---------|
+| `#` | `%23` |
+| `$` | `%24` |
+| `@` | `%40` |
+| `}` | `%7D` |
+| `~` | `%7E` |
 
 ### Running in Production
 
@@ -64,6 +82,22 @@ npm run build
 
 # Start production server
 npm start
+```
+
+### Running with PM2 (recommended for production)
+
+```bash
+# Install PM2 globally
+npm install -g pm2
+
+# Start with PM2
+pm2 start npm --name "waste-api" -- start
+
+# Save PM2 process list
+pm2 save
+
+# Set up auto-start on reboot
+pm2 startup
 ```
 
 ## API Documentation
