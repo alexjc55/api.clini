@@ -116,6 +116,7 @@ psql $DATABASE_URL < docs/database-schema.sql
 
 **Endpoints:**
 - `GET /users` - List users (staff)
+- `GET /users/me` - Get current user profile (convenience endpoint for mobile apps)
 - `GET /users/:id` - Get user details
 - `PATCH /users/:id` - Update user
 - `DELETE /users/:id` - Soft delete user
@@ -126,6 +127,7 @@ psql $DATABASE_URL < docs/database-schema.sql
 - Profile management
 - Activity tracking (`/users/:id/activity`)
 - Feature flags for segmentation (`/users/:id/flags`)
+- Convenience `/users/me` endpoint - returns current user without needing to parse JWT
 
 ### 3. Order Management
 
@@ -155,16 +157,18 @@ cancelled  cancelled   cancelled    cancelled
 ### 4. Courier Management
 
 **Endpoints:**
-- `GET /couriers` - List couriers
+- `GET /couriers` - List couriers (staff)
+- `GET /couriers/me` - Get current courier profile (convenience endpoint for courier app)
 - `GET /couriers/:id` - Courier profile
 - `PATCH /couriers/:id` - Update profile
-- `POST /couriers/:id/verify` - Verify courier
+- `PATCH /couriers/:id/verify` - Verify courier (staff)
 - `GET /couriers/:id/orders` - Courier's orders
 
 **Features:**
 - Profile verification workflow
 - Order acceptance/completion
 - Performance metrics
+- Convenience `/couriers/me` endpoint - returns current courier's profile with user data
 
 ### 5. Address Management
 
