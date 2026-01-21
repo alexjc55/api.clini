@@ -1669,6 +1669,14 @@ paths:
                           - client
         "401":
           description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  key: auth.missing_token
+                  params: {}
   /users/{id}:
     get:
       tags:
@@ -1682,6 +1690,8 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: UUID пользователя
       responses:
         "200":
           description: Данные пользователя
@@ -1689,6 +1699,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+        "401":
+          description: Не авторизован
+        "403":
+          description: Нет прав на просмотр
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  key: common.missing_permission
+                  params:
+                    required:
+                      - users.read
+        "404":
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  key: user.not_found
+                  params:
+                    userId: a8e94d27-d0b2-426b-91db-ccaffcd974f7
     patch:
       tags:
         - users
