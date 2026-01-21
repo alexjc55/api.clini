@@ -18,13 +18,13 @@ export function generateTokens(userId: string): { accessToken: string; refreshTo
   const accessToken = jwt.sign(
     { userId, type: "access" },
     JWT_SECRET,
-    { expiresIn: ACCESS_TOKEN_EXPIRY, issuer: "waste-collection-api" }
+    { expiresIn: ACCESS_TOKEN_EXPIRY, issuer: "clini-api" }
   );
   
   const refreshToken = jwt.sign(
     { userId, type: "refresh" },
     JWT_SECRET,
-    { expiresIn: REFRESH_TOKEN_EXPIRY, issuer: "waste-collection-api" }
+    { expiresIn: REFRESH_TOKEN_EXPIRY, issuer: "clini-api" }
   );
   
   return { accessToken, refreshToken };
@@ -32,7 +32,7 @@ export function generateTokens(userId: string): { accessToken: string; refreshTo
 
 export function verifyAccessToken(token: string): string | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET, { issuer: "waste-collection-api" }) as unknown as TokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET, { issuer: "clini-api" }) as unknown as TokenPayload;
     if (payload.type !== "access") return null;
     return payload.userId;
   } catch {
@@ -45,7 +45,7 @@ export async function refreshAccessToken(
   storage: IStorage
 ): Promise<{ accessToken: string; refreshToken: string } | null> {
   try {
-    const payload = jwt.verify(refreshToken, JWT_SECRET, { issuer: "waste-collection-api" }) as unknown as TokenPayload;
+    const payload = jwt.verify(refreshToken, JWT_SECRET, { issuer: "clini-api" }) as unknown as TokenPayload;
     if (payload.type !== "refresh") return null;
     
     const session = await storage.getSession(refreshToken);

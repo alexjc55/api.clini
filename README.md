@@ -32,11 +32,11 @@ A production-ready REST API for waste collection and household services platform
 
 ```bash
 # Clone the repository (into current directory)
-git clone https://github.com/your-org/waste-collection-api.git .
+git clone https://github.com/your-org/clini-api.git .
 
 # Or clone into a new folder
-git clone https://github.com/your-org/waste-collection-api.git
-cd waste-collection-api
+git clone https://github.com/your-org/clini-api.git
+cd clini-api
 
 # Install dependencies
 npm install
