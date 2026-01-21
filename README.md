@@ -100,6 +100,54 @@ pm2 save
 pm2 startup
 ```
 
+## Database Migration
+
+### Files Structure
+
+| File | Description |
+|------|-------------|
+| `docs/database-schema.sql` | Full database schema dump (structure only) |
+| `migrations/*.sql` | Incremental Drizzle migration files |
+| `scripts/migrate.ts` | Safe migration script for production |
+| `docs/MIGRATION_GUIDE.md` | Detailed migration instructions |
+
+### Fresh Installation (New Server)
+
+```bash
+# Option 1: Apply full schema directly
+psql $DATABASE_URL < docs/database-schema.sql
+
+# Option 2: Use Drizzle push
+npx drizzle-kit push --dialect=postgresql --schema=./server/database/schema.ts --url=$DATABASE_URL
+```
+
+### Incremental Migration (Existing Database)
+
+```bash
+# 1. REQUIRED: Create backup first
+pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 2. Run migrations (preserves existing data)
+npx tsx scripts/migrate.ts
+```
+
+### Generate New Migrations
+
+When you modify `server/database/schema.ts`:
+
+```bash
+# Generate migration SQL
+npx drizzle-kit generate --dialect=postgresql --schema=./server/database/schema.ts --out=./migrations
+
+# Review generated SQL before applying
+cat migrations/XXXX_*.sql
+
+# Apply migration
+npx tsx scripts/migrate.ts
+```
+
+See [docs/MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md) for complete migration documentation.
+
 ## API Documentation
 
 - **Interactive Docs**: Available at `/api-docs` when running the server
