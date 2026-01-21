@@ -362,9 +362,9 @@ All sensitive operations logged:
 
 ## Contact
 
-- **Security Issues**: security@your-domain.com
-- **General Questions**: api-support@your-domain.com
-- **Emergency**: +1-XXX-XXX-XXXX (24/7 hotline)
+- **Security Issues**: alexjc55@gmail.com
+- **General Questions**: alexjc55@gmail.com
+- **Emergency**: +972-52-849-6528 (24/7 hotline)
 
 ---
 

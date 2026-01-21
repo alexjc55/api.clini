@@ -249,7 +249,7 @@ This project is proprietary software. See [LICENSE](LICENSE) for details.
 - **Documentation**: [docs/](docs/)
 - **API Reference**: `/api-docs`
 - **Issues**: GitHub Issues
-- **Email**: api-support@your-domain.com
+- **Email**: alexjc55@gmail.com
 
 ---
 
